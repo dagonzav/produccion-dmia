@@ -1,0 +1,1087 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.4 system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>Producción DMI-A</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky shop-floor header with house selector + tabs; content in a 1180px column; summary tiles, then charts, then detail tables */
+:root{
+  --bg:#f3f4f2; --panel:#ffffff; --ink:#15191c; --ink-2:#4a5257; --ink-3:#7a8388; --line:#dde1df; --line-2:#c9cecc;
+  --accent:#1f5f8b; --accent-ink:#ffffff; --accent-soft:#e3edf4;
+  --armado:#2a78d6; --forrado:#eb6834; --plan:#7a8388;
+  --good:#0ca30c; --warn:#fab219; --crit:#d03b3b; --good-soft:#e2f4e2; --warn-soft:#fdf1d6; --crit-soft:#f8e1e1;
+  --f-display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141719; --panel:#1c2023; --ink:#eef0ef; --ink-2:#b8bfc2; --ink-3:#8a9397; --line:#2c3236; --line-2:#3a4146;
+  --accent:#5a9fd0; --accent-ink:#0d1418; --accent-soft:#1f3140;
+  --armado:#3987e5; --forrado:#d95926; --plan:#8a9397;
+  --good-soft:#173019; --warn-soft:#3a2f12; --crit-soft:#3a1c1c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141719; --panel:#1c2023; --ink:#eef0ef; --ink-2:#b8bfc2; --ink-3:#8a9397; --line:#2c3236; --line-2:#3a4146;
+  --accent:#5a9fd0; --accent-ink:#0d1418; --accent-soft:#1f3140;
+  --armado:#3987e5; --forrado:#d95926; --plan:#8a9397;
+  --good-soft:#173019; --warn-soft:#3a2f12; --crit-soft:#3a1c1c; color-scheme:dark}
+*{box-sizing:border-box}
+html{overflow-y:scroll;scrollbar-gutter:stable}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--panel);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;padding-block:10px}
+.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
+.brand b{white-space:nowrap;font-family:var(--f-display);font-size:22px;font-weight:700;letter-spacing:.02em}
+.brand span{font-size:12px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.08em}
+nav.tabs{display:flex;gap:2px;overflow-x:auto}
+nav.tabs a{font-family:var(--f-display);font-weight:600;font-size:15px;letter-spacing:.03em;text-decoration:none;color:var(--ink-2);padding:6px 12px;border-radius:var(--r);white-space:nowrap}
+nav.tabs a[aria-current="page"]{background:var(--accent);color:var(--accent-ink)}
+nav.tabs a:hover:not([aria-current]){background:var(--accent-soft)}
+main{padding-block:20px 60px;display:grid;gap:20px}
+[data-view]{display:grid;gap:20px;align-content:start;min-width:0}
+[hidden]{display:none!important}
+.panel{align-content:start}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance;font-weight:600}
+h1{font-size:28px} h2{font-size:20px} h3{font-size:16px}
+.muted{color:var(--ink-3)} .small{font-size:13px}
+.lbl{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--f-mono);font-size:13px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.grow{flex:1 1 auto}
+.headline{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 20px}
+.headline .meta{color:var(--ink-2);font-size:14px}
+select,input,button,textarea{font:inherit;color:inherit}
+select,input[type=text],input[type=date],input[type=number],textarea{background:var(--panel);border:1px solid var(--line-2);border-radius:5px;padding:6px 8px;min-width:0}
+input[type=number]{width:5.5em}
+button{cursor:pointer;border:1px solid var(--line-2);background:var(--panel);border-radius:5px;padding:7px 12px;font-weight:500}
+button:hover{border-color:var(--accent)}
+button.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+button.ghost{border-color:transparent;background:transparent;padding:4px 8px}
+button.danger{color:var(--crit)}
+button:disabled{opacity:.5;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:grid;gap:4px;align-content:start}
+.tile .v{font-family:var(--f-display);font-size:34px;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+.tile .v small{font-size:16px;font-weight:600;color:var(--ink-2)}
+.tile .s{font-size:13px;color:var(--ink-2)}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;display:flex;gap:2px}
+.bar i{display:block;height:100%}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.chip.good{background:var(--good-soft);color:var(--ink)} .chip.good::before{content:"●";color:var(--good)}
+.chip.warn{background:var(--warn-soft);color:var(--ink)} .chip.warn::before{content:"▲";color:var(--warn)}
+.chip.crit{background:var(--crit-soft);color:var(--ink)} .chip.crit::before{content:"■";color:var(--crit)}
+.chip.neutral{background:var(--line);color:var(--ink-2)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:20px}
+.chart{position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{fill:var(--ink-3);font-family:var(--f-body);font-size:11px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--ink-2);margin-top:6px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px}
+.legend i.sq{height:10px;width:10px}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12.5px;padding:7px 9px;border-radius:5px;white-space:nowrap;z-index:3;line-height:1.4}
+.tip b{font-weight:600}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);text-align:left;font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line-2);white-space:nowrap}
+td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.r,th.r{text-align:right}
+tr.flag td{background:var(--warn-soft)}
+tr.bad td{background:var(--crit-soft)}
+.ck{width:18px;height:18px;accent-color:var(--accent)}
+.drop{border:2px dashed var(--line-2);border-radius:var(--r);padding:18px;display:grid;gap:8px;justify-items:start}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.ways{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.way{border:1px solid var(--line);border-radius:var(--r);padding:14px;display:grid;gap:8px;align-content:start}
+.way h3{display:flex;gap:8px;align-items:center}
+.notice{padding:10px 12px;border-radius:5px;background:var(--accent-soft);font-size:14px}
+.notice.err{background:var(--crit-soft)}
+.notice.warn{background:var(--warn-soft)}
+.empty{padding:28px;text-align:center;color:var(--ink-2);display:grid;gap:10px;justify-items:center}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.form label{display:grid;gap:4px;font-size:13px;color:var(--ink-2)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:6px;z-index:20;font-size:14px}
+details summary{cursor:pointer;font-family:var(--f-display);font-weight:600;font-size:16px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line-2);border-top-color:var(--accent);border-radius:50%;animation:sp 0.8s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.elinput{width:9.5em;font-family:var(--f-mono);font-size:13px}
+.pill-tipo{font-size:12px;color:var(--ink-3)}
+body:not(.is-admin) .adminOnly{display:none!important}
+details.casa>summary{cursor:pointer}
+details.casa>summary::-webkit-details-marker{display:none}
+details.casa[open] .muted.small+span{}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><b>DMI-A</b><span>Producción diaria · Taller de prefabricados</span><span id="pubStamp" style="text-transform:none;letter-spacing:0"></span></div>
+    <nav class="tabs" id="tabs">
+      <a href="#produccion" data-v="produccion">Producción diaria</a>
+      <a href="#casas" data-v="casas">Casas</a>
+      <a href="#detalle" data-v="detalle">Detalle casa</a>
+      <a href="#cargar" data-v="cargar" class="adminOnly">Cargar ficha</a>
+      <a href="#fichas" data-v="fichas" class="adminOnly">Fichas</a>
+      <a href="#obras" data-v="obras" class="adminOnly">Configuración</a>
+      <a href="#admin" data-v="admin" id="tabAdmin" class="adminOnly">Administración</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+<main>
+  <!-- RESUMEN -->
+  <section id="v-prod" data-view hidden></section>
+  <section id="v-casas" data-view hidden></section>
+  <section id="v-resumen" data-view hidden></section>
+
+  <!-- CARGAR -->
+  <section id="v-cargar" data-view hidden>
+    <div class="panel" style="display:grid;gap:16px">
+      <div class="headline"><h1 id="cgTitle">Cargar ficha de producción</h1><span class="meta" id="cgSub">Sube la foto o el Excel de la ficha, revisa los elementos y guarda.</span></div>
+      <div class="form">
+        <label>Casa (por defecto para todas las filas)<select id="cgCasa"></select></label>
+        <label>Fecha de la ficha<input type="date" id="cgFecha"></label>
+        <label>Hoja / referencia<input type="text" id="cgHoja" placeholder="Ej: Hoja 1"></label>
+        <label>Supervisor<input type="text" id="cgSup" placeholder="Nombre"></label>
+      </div>
+      <div class="ways" id="cgWays">
+        <div class="way drop" id="dropFoto">
+          <h3>Foto de la ficha</h3>
+          <span class="small muted">Claude lee la ficha escrita a mano. Puedes subir varias hojas del mismo día.</span>
+          <input type="file" id="fFoto" accept="image/*" multiple hidden>
+          <button class="pri" id="bFoto">Elegir fotos</button>
+          <span class="small" id="fotoMsg"></span>
+        </div>
+        <div class="way drop" id="dropXls">
+          <h3>Ficha en Excel</h3>
+          <span class="small muted">Formato "Producción diaria DMIA.xlsx" llenado en el computador.</span>
+          <input type="file" id="fXls" accept=".xlsx,.xls,.xlsm" hidden>
+          <button id="bXls">Elegir Excel</button>
+          <span class="small" id="xlsMsg"></span>
+        </div>
+        <div class="way">
+          <h3>Escribir a mano</h3>
+          <span class="small muted">Agrega filas y escribe el código de cada elemento.</span>
+          <button id="bManual">Agregar 5 filas</button>
+        </div>
+      </div>
+      <div id="cgReview"></div>
+    </div>
+  </section>
+
+  <!-- FICHAS -->
+  <section id="v-fichas" data-view hidden></section>
+
+  <!-- OBRAS -->
+  <section id="v-obras" data-view hidden></section>
+
+  <!-- ADMIN -->
+  <section id="v-admin" data-view hidden></section>
+</main>
+</div>
+<datalist id="dlCodes"></datalist>
+
+<script>window.claude={use:async()=>null};</script>
+<script>
+"use strict";
+/* ---------- Catálogo (BD de las planillas de rendimiento piloto) ----------
+   [tipo, código, cantidad, kg estructura (metalcon) por unidad, kg revestimiento (EPS+OSB) por unidad] */
+let CAT = {"OSORNO":[["Panel 1°piso","L1",1,34.9,42.84],["Panel 1°piso","L2",1,33.8,37.53],["Panel 1°piso INT","L3",1,22.4,0.0],["Panel 1°piso INT","L4",1,48.3,0.0],["Panel 1°piso","L5",1,36.3,43.44],["Panel 1°piso INT","L6",1,54.0,0.0],["Panel 1°piso INT","L7",1,37.4,0.0],["Panel 1°piso INT","L8",1,8.0,0.0],["Panel 1°piso INT","L9",1,8.0,0.0],["Panel 1°piso INT","L10",1,20.1,0.0],["Panel 1°piso","L11",1,41.6,49.48],["Panel 1°piso","L12",1,11.7,14.32],["Panel 1°piso","L13",1,30.3,35.72],["Panel 1°piso","L14",1,31.1,26.95],["Panel 1°piso INT","L15",1,38.5,0.0],["Panel 1°piso","L16",1,39.1,35.62],["Panel 1°piso","L17",1,21.3,24.76],["Panel 1°piso INT","L18",1,55.1,0.0],["Panel 1°piso INT","L19",1,22.8,0.0],["Panel 1°piso INT","L20",1,37.0,0.0],["Panel 1°piso INT","L21",1,26.6,0.0],["Panel 1°piso INT","L22",1,16.3,0.0],["Panel 1°piso","L23",1,26.7,34.69],["Panel 1°piso","L24",1,30.2,36.34],["Panel 1°piso","L25",1,9.6,8.59],["Panel 1°piso","L26",1,9.0,4.55],["Panel 1°piso","TL1",1,26.3,28.78],["Panel 1°piso","TL2",1,69.9,72.52],["Panel 1°piso","TL3",1,29.5,28.8],["Panel 1°piso","BW2-C1",1,1.4,1.17],["Panel 1°piso","BW2-C2",1,1.4,1.17],["Panel 1°piso","BW2-C3",1,1.4,1.17],["Panel 1°piso","BW2-C4",1,1.4,1.17],["Panel 1°piso","BW2-T1",1,10.5,7.8],["Panel 1°piso","BW2-T2",1,9.4,7.91],["Panel 1°piso","BW2-T3",1,8.6,9.67],["Panel 1°piso","BW2-TD",1,8.6,7.32],["Panel 1°piso","BW2-T1.1",1,13.6,5.33],["Panel 1°piso","BW2-T2.1",1,8.5,9.26],["Panel 1°piso","BW2-P",1,3.8,8.25],["Panel 1°piso","BW1-C1",1,1.4,1.17],["Panel 1°piso","BW1-C2",1,1.4,1.17],["Panel 1°piso","BW1-C3",1,1.4,1.17],["Panel 1°piso","BW1-C4",1,1.4,1.17],["Panel 1°piso","BW1-T1",1,10.5,7.8],["Panel 1°piso","BW1-T2",1,9.4,7.91],["Panel 1°piso","BW1-T3",1,8.6,9.67],["Panel 1°piso","BW1-TD",1,8.6,7.32],["Panel 1°piso","BW1-T1.1",1,13.6,5.33],["Panel 1°piso","BW1-T2.1",1,8.5,9.26],["Panel 1°piso","BW1-P",1,3.8,8.25],["Panel 2°piso","L27",1,13.6,15.94],["Panel 2°piso","L28",1,12.8,17.77],["Panel 2°piso","L29",1,46.7,60.84],["Panel 2°piso","L30",1,29.5,37.49],["Panel 2°piso","L31",1,12.3,21.63],["Panel 2°piso","L32",1,19.7,21.8],["Panel 2°piso","L33",1,30.4,41.83],["Panel 2°piso","L34",1,39.5,47.22],["Panel 2°piso","L35",1,11.7,12.61],["Panel 2°piso INT","L36",1,46.3,0.0],["Panel 2°piso INT","L37",1,47.7,0.0],["Panel 2°piso INT","L38",1,8.5,0.0],["Panel 2°piso INT","L39",1,5.8,0.0],["Panel 2°piso","L40",1,14.8,21.87],["Panel 2°piso","L41",1,6.4,6.93],["Panel 2°piso","L42",1,24.4,21.99],["Panel 2°piso","L43",1,25.3,37.45],["Panel 2°piso","L44",1,34.7,54.64],["Panel 2°piso","L45",1,20.3,22.55],["Panel 2°piso","L46",1,25.9,21.66],["Panel 2°piso INT","L47",1,20.0,0.0],["Panel 2°piso INT","L48",1,23.0,0.0],["Panel 2°piso INT","L49",1,22.9,0.0],["Panel 2°piso INT","L50",1,32.6,0.0],["Panel 2°piso INT","L51",1,11.3,0.0],["Panel 2°piso INT","L52",1,49.1,0.0],["Panel 2°piso INT","L53",1,10.2,0.0],["Panel 2°piso INT","L54",1,4.2,0.0],["Panel 2°piso INT","L55",1,9.9,0.0],["Panel 2°piso INT","L56",1,12.1,0.0],["Panel 2°piso INT","L57",1,5.6,0.0],["Panel 2°piso","L58",1,21.9,58.94],["Entrepiso","L1001",1,137.8,0.0],["Entrepiso","L1002",1,128.6,0.0],["Entrepiso","L1003",1,219.8,0.0],["Entrepiso","L1004",1,87.3,0.0],["Entrepiso","L1005",1,170.9,0.0],["Entrepiso","L1006",1,28.9,0.0],["Entrepiso","L1007",1,21.1,0.0],["Cerchas","C1",1,30.3,0.0],["Cerchas","C2",1,23.9,0.0],["Cerchas","C3",1,30.9,0.0],["Cerchas","C4",2,14.6,0.0],["Cerchas","C5",1,25.6,0.0],["Cerchas","C2a",1,24.0,0.0],["Cerchas","C3a",1,30.3,0.0],["Cerchas","C3b",1,16.0,0.0],["Cerchas","C4a",1,6.4,0.0],["Cerchas","C5a",1,20.9,0.0],["Cerchas","C5b",1,22.2,0.0],["Sobretabique","ST1",1,9.5,14.94],["Sobretabique","ST2",1,9.3,6.89],["Sobretabique","ST3",1,11.2,28.69],["Sobretabique","ST4",1,6.0,7.47],["Perfil","N1",1,1.4,0.0],["Perfil","N2",1,1.4,0.0],["Perfil","VM460_L",1,6.1,0.0],["Perfil","60.TL1",1,3.7,0.0],["Perfil","60.TL2",1,9.1,0.0],["Perfil","60.TL3",1,3.7,0.0],["Perfil","HN2",1,1.2,0.0],["Perfil","HN4",1,1.2,0.0],["Perfil","VM160_L",1,3.0,0.0],["Perfil","VM260_L",1,3.7,0.0],["Perfil","VM360_L",1,4.0,0.0],["Perfil","VM2.11V",1,0.6,0.0],["Perfil","VM2.12V",1,0.6,0.0],["Perfil","VM2.13V",1,2.1,0.0],["Perfil","VM2.14V",1,2.2,0.0],["Perfil","VM1.1H",1,4.1,0.0],["Perfil","VM1.1V",1,3.6,0.0],["Perfil","VM1.2",1,5.8,0.0],["Perfil","VM1.2V",1,3.2,0.0],["Perfil","VM1.3H",1,16.0,0.0],["Perfil","VM1.3V",1,3.6,0.0],["Perfil","VM2.1V",1,6.1,0.0],["Perfil","VM.2.V",1,6.2,0.0],["Perfil","VM2.4H",1,3.3,0.0],["Perfil","VM3.1V",1,1.3,0.0],["Perfil","VM3.2V",1,1.1,0.0],["Perfil","VM3.3V",1,1.3,0.0],["Perfil","VM3.5V",1,2.1,0.0],["Panel techumbre","PC1",1,27.9,72.32],["Panel techumbre","PC2",1,13.8,28.98],["Panel techumbre","PC3",1,62.1,166.29],["Panel techumbre","PC4",1,39.9,101.1],["Panel techumbre","PC5",1,13.7,31.37],["Panel techumbre","PC6",1,9.9,23.44],["Panel techumbre","PC7",1,62.1,166.29],["Panel techumbre","PC8",1,54.7,138.0],["Panel techumbre","PC9",1,7.1,13.28],["Panel techumbre","PC10",1,61.1,104.0],["Panel techumbre","PC11",1,22.5,41.32],["Panel techumbre","PC12",1,4.5,7.38],["Panel techumbre","PC13",1,22.5,41.32],["Panel techumbre","PC14",1,37.4,61.77],["Panel techumbre","PC15",1,16.3,24.77],["Panel techumbre","PC16",1,55.7,116.25],["Panel techumbre","PC17",1,16.1,20.61],["Panel techumbre","PC18",1,18.5,15.88],["Panel Escalera","TSC-01",1,25.6,0.0],["Panel Escalera","TSC-02",1,37.3,0.0],["Panel Escalera","TSC-03",1,14.7,0.0],["Panel Escalera","TSC-04",1,32.2,0.0],["Panel Escalera","TSC-05",1,10.5,0.0],["Panel Escalera","TSC-06",1,24.1,0.0],["Panel Escalera","TSC-07",1,15.9,0.0],["Panel Escalera","TSC-01SUP",1,8.7,0.0],["Escalon","E1",4,10.8,0.0],["Escalon","E2",1,3.6,0.0],["Escalon","E3",1,3.8,0.0],["Escalon","E4",1,2.9,0.0],["Escalon","E5",1,3.5,0.0],["Escalon","E6",1,3.9,0.0],["Escalon","E7",1,3.3,0.0],["Escalon","E8",3,8.7,0.0]],"TENGLO":[["Panel 1°piso","L1",1,59.1,60.34],["Panel 1°piso","L2",1,48.2,52.89],["Panel 1°piso","L3",1,25.3,19.19],["Panel 1°piso","L4",1,15.8,19.83],["Panel 1°piso","L5",1,36.1,36.2],["Panel 1°piso","L6",1,32.3,39.18],["Panel 1°piso","L7",1,49.3,51.83],["Panel 1°piso","L8",1,59.3,64.16],["Panel 1°piso","L9",1,38.6,37.81],["Panel 1°piso","L10",1,30.1,30.47],["Panel 1°piso","L11",1,26.6,28.38],["Panel 1°piso","L12",1,46.8,47.18],["Panel 1°piso","L13",1,14.9,12.39],["Panel 1°piso INT","L14",1,13.6,0.0],["Panel 1°piso INT","L15",1,14.9,0.0],["Panel 1°piso INT","L16",1,18.6,0.0],["Panel 1°piso INT","L17",1,16.9,0.0],["Panel 1°piso INT","L18",1,9.6,0.0],["Panel 1°piso","L19",1,9.8,15.57],["Panel 1°piso INT","L20",1,17.5,0.0],["Panel 1°piso INT","L21",1,16.7,0.0],["Panel 1°piso INT","L22",1,9.5,0.0],["Panel 1°piso INT","L23",1,32.4,0.0],["Panel 1°piso INT","L24",1,17.6,0.0],["Panel 1°piso","BW1-C1",1,1.4,1.26],["Panel 1°piso","BW1-C2",1,1.4,1.26],["Panel 1°piso","BW1-C3",1,1.4,1.26],["Panel 1°piso","BW1-C4",1,1.4,1.26],["Panel 1°piso","BW1-L2.1",1,7.6,9.26],["Panel 1°piso","BW1-L2.2",1,7.6,9.26],["Panel 1°piso","BW1-3",1,8.6,9.67],["Panel 1°piso","BW1-4",1,8.6,7.32],["Panel 1°piso","BW1-L1.1",1,20.5,12.63],["Panel 1°piso","BW1-L1.2",1,20.5,12.63],["Panel 1°piso","BW1-P",1,3.8,8.25],["Panel 2°piso","L25",1,34.6,21.29],["Panel 2°piso","L26",1,25.7,30.15],["Panel 2°piso","L27",1,53.1,69.39],["Panel 2°piso INT","L28",1,16.1,0.0],["Panel 2°piso","L29",1,17.8,24.22],["Panel 2°piso INT","L30",1,10.3,0.0],["Panel 2°piso INT","L31",1,48.3,0.0],["Panel 2°piso","L32",1,43.7,43.13],["Panel 2°piso","L33",1,46.6,55.33],["Panel 2°piso INT","L34",1,12.2,0.0],["Panel 2°piso","L35",1,16.0,28.35],["Panel 2°piso","L36",1,5.6,9.22],["Panel 2°piso","L37",1,5.8,4.06],["Panel 2°piso","L38",1,22.6,31.68],["Panel 2°piso","L39",1,22.9,31.72],["Panel 2°piso INT","L40",1,5.0,0.0],["Panel 2°piso INT","L41",1,8.8,0.0],["Panel 2°piso INT","L42",1,8.9,0.0],["Panel 2°piso INT","L43",1,35.9,0.0],["Panel 2°piso INT","L44",1,43.0,0.0],["Panel 2°piso","L45",1,11.4,10.57],["Panel 2°piso","L46",1,22.6,14.46],["Panel 2°piso","L47",1,34.8,29.2],["Panel 2°piso INT","L48",1,10.2,0.0],["Panel 2°piso INT","L49",1,29.9,0.0],["Panel 2°piso","L50",1,26.8,33.62],["Panel Exterior","L51",1,13.5,13.08],["Panel Exterior","L52",1,19.2,19.59],["Entrepiso","L101",1,143.3,0.0],["Entrepiso","L102",1,71.4,0.0],["Entrepiso","L103",1,70.5,0.0],["Entrepiso","L104",1,79.5,0.0],["Entrepiso","L105",1,128.9,0.0],["Cerchas","C1",1,21.0,0.0],["Cerchas","C2.1",1,33.2,0.0],["Cerchas","C2",2,28.5,0.0],["Cerchas","C3",1,27.6,0.0],["Cerchas","C1.a",1,16.7,0.0],["Fronton","F2",1,35.5,0.0],["Fronton","F3",1,33.5,0.0],["Fronton","F4",1,13.0,0.0],["Perfil","P1",1,7.4,0.0],["Perfil","P2",1,9.8,0.0],["Perfil","P3",1,12.2,0.0],["Panel techumbre","L1001",1,48.6,28.98],["Panel techumbre","L1002",1,74.2,56.37],["Panel techumbre","L1003",1,22.1,56.37],["Panel techumbre","L1004",1,35.7,152.82],["Panel techumbre","L1005",1,85.2,43.46],["Panel techumbre","L1006",1,29.2,107.56],["Panel techumbre","L1007",1,61.1,27.32],["Panel techumbre","L1008",1,17.9,86.48],["Panel techumbre","L1009",1,51.0,36.55],["Panel techumbre","L1010",1,39.0,53.49],["Panel Escalera","TSC-01",1,39.0,0.0],["Panel Escalera","TSC-02",1,52.6,0.0],["Panel Escalera","TSC-03",1,53.3,0.0],["Panel Escalera","TSC-04",1,52.8,0.0],["Panel Escalera","TSC-05",1,19.1,0.0],["Escalon","P1",5,2.9,0.0],["Escalon","P2",1,3.3,0.0],["Escalon","P3",1,4.2,0.0],["Escalon","P4",1,4.0,0.0],["Escalon","P5",1,4.2,0.0],["Escalon","P6",1,3.8,0.0],["Escalon","P7",5,3.3,0.0]]};
+/* Rendimientos piloto (kg/h) de las planillas "Rendimientos kg ..._PILOTO v01" */
+let PILOTO = {OSORNO:{a:72.34,f:66.59,ref:"Osorno piloto, ago 2026"}, TENGLO:{a:51.37,f:56.38,ref:"Tenglo piloto, sep 2026"}};
+const tiposList = () => Object.keys(CAT);
+let CATMETA = {}; /* tipo -> {nombre, actualizado} */
+const catName = t => (CATMETA[t] && CATMETA[t].nombre) || t;
+const DEF_CFG = {horasDia:7, factorForrado:0.3, sabado:false, feriados:[], sinForrado:[]};
+
+const norm = s => String(s||"").toUpperCase().replace(/[\s\-_–—:]+/g,"").replace(/,/g,".").replace(/^\.+|\.+$/g,"").replace(/[^A-Z0-9.]/g,"");
+let IDX = {};
+function rebuildIdx(){ IDX={}; for(const t of Object.keys(CAT)){ IDX[t]=new Map(); CAT[t].forEach(([tipo,code,q,a,f])=>IDX[t].set(norm(code),{tipo,code,q,a,f})); } }
+rebuildIdx();
+/* RAWCAT: catálogo tal como está en la base. CAT: el que se usa para calcular, sin el revestimiento de los elementos que hoy no se forran en taller */
+let RAWCAT = CAT;
+const sinForradoPre = () => (st.cfg.sinForrado||[]).map(norm).filter(Boolean);
+const noForrado = code => { const k=norm(code); return sinForradoPre().some(p=>k.startsWith(p)); };
+function applyCfg(){ const out={}; for(const t of Object.keys(RAWCAT)) out[t]=RAWCAT[t].map(r=> noForrado(r[1]) ? [r[0],r[1],r[2],r[3],0] : r); CAT=out; rebuildIdx(); }
+const lookup = (tipo,code) => (code && IDX[tipo] && IDX[tipo].get(norm(code))) || null;
+/* Una fila de ficha guarda el código reconocido (c) y lo escrito (raw); si el catálogo cambia, se vuelve a reconocer por lo escrito */
+const match = (tipo,it) => lookup(tipo,it.c) || lookup(tipo,it.raw);
+
+/* ---------- Fechas (cadenas YYYY-MM-DD, sin zona horaria) ---------- */
+const D = s => { const [y,m,d]=s.split("-").map(Number); return new Date(Date.UTC(y,m-1,d)); };
+const S = dt => dt.toISOString().slice(0,10);
+const addDays = (s,n) => { const d=D(s); d.setUTCDate(d.getUTCDate()+n); return S(d); };
+const todayS = () => { const n=new Date(); return S(new Date(Date.UTC(n.getFullYear(),n.getMonth(),n.getDate()))); };
+const MES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+const DIA = ["dom","lun","mar","mié","jue","vie","sáb"];
+const fmtD = s => { if(!s) return "—"; const d=D(s); return `${DIA[d.getUTCDay()]} ${d.getUTCDate()} ${MES[d.getUTCMonth()]}`; };
+const fmtDY = s => { if(!s) return "—"; const d=D(s); return `${d.getUTCDate()} ${MES[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
+function isWork(s,cfg){ const w=D(s).getUTCDay(); if(w===0) return false; if(w===6 && !cfg.sabado) return false; return !(cfg.feriados||[]).includes(s); }
+function workdaysBetween(a,b,cfg){ /* inclusive count of workdays in [a,b] */ if(!a||!b||b<a) return 0; let n=0; for(let s=a;s<=b;s=addDays(s,1)) if(isWork(s,cfg)) n++; return n; }
+function addWorkdays(s,n,cfg){ /* the n-th workday after s (n>=1) */ let c=0, d=s; if(n<=0) return s; while(c<n){ d=addDays(d,1); if(isWork(d,cfg)) c++; } return d; }
+function firstWorkday(s,cfg){ let d=s; while(!isWork(d,cfg)) d=addDays(d,1); return d; }
+
+/* ---------- Formato ---------- */
+const nf0 = new Intl.NumberFormat("es-CL",{maximumFractionDigits:0});
+const nf1 = new Intl.NumberFormat("es-CL",{minimumFractionDigits:1,maximumFractionDigits:1});
+const kg = v => nf0.format(Math.round(v));
+const pct = v => nf1.format(v*100)+"%";
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $ = id => document.getElementById(id);
+
+/* ---------- Estado ---------- */
+const st = { db:null, casas:[], fichas:[], cfg:{...DEF_CFG}, loaded:{casas:false,fichas:false}, casaId:null, corte:null, draft:null, editId:null, dbState:"connecting", isAdmin:false, adm:null };
+try { st.casaId = localStorage.getItem("dmia.casa"); } catch(e){}
+
+/* Cada fila de una ficha puede ser de una casa distinta; sin casa propia, es la casa de la ficha */
+const itemCasa = (fi,it) => it.casaId || fi.casaId;
+const fichaCasas = fi => [...new Set((fi.items||[]).map(it=>itemCasa(fi,it)))];
+
+/* ---------- Cálculo de una casa ---------- */
+function computeCasa(casa){
+  const cfg = st.cfg, cat = CAT[casa.tipo]||[], pil = PILOTO[casa.tipo]||{a:60,f:60};
+  let totA=0,totF=0; const byTipo={};
+  for(const [tipo,code,q,a,f] of cat){ totA+=q*a; totF+=q*f; (byTipo[tipo] ||= {tipo,tot:0,done:0,n:0,nd:0}); byTipo[tipo].tot+=q*(a+f); byTipo[tipo].n+=q; }
+  const fichas = st.fichas.filter(f=>fichaCasas(f).includes(casa.id)).sort((x,y)=>x.fecha<y.fecha?-1:x.fecha>y.fecha?1:(x.creado||0)-(y.creado||0));
+  const prod = new Map(); /* code -> {a:qty,o:qty} */
+  const days = new Map(); /* fecha -> {a,f,n} */
+  const issues = []; const elemDone = new Map();
+  for(const fi of fichas){
+    for(const it of (fi.items||[])){
+      if(itemCasa(fi,it)!==casa.id) continue;
+      const day = days.get(fi.fecha) || {fecha:fi.fecha,a:0,f:0,n:0}; days.set(fi.fecha,day);
+      const m = match(casa.tipo,it);
+      if(!m){ if(it.raw||it.c) issues.push({fecha:fi.fecha,raw:it.raw||it.c,why:"No está en el catálogo"}); continue; }
+      const p = prod.get(m.code) || {a:0,o:0}; prod.set(m.code,p);
+      const q = Math.max(1, Number(it.q)||1);
+      if(it.e){ const ok=Math.min(q, m.q-p.a); if(ok<q) issues.push({fecha:fi.fecha,raw:m.code,why:"Estructura repetida: ya estaba contada, no suma de nuevo"}); if(ok>0){ p.a+=ok; p.fa=fi.fecha; day.a+=ok*m.a; day.n++; } }
+      if(it.o){ if(m.f<=0){ issues.push({fecha:fi.fecha,raw:m.code,why:noForrado(m.code)?"OSB marcado, pero el revestimiento de este elemento no se cuenta (no se hace en taller)":"Elemento sin revestimiento en el catálogo"}); }
+        else { const ok=Math.min(q, m.q-p.o); if(ok<q) issues.push({fecha:fi.fecha,raw:m.code,why:"OSB repetido: ya estaba contado, no suma de nuevo"}); if(ok>0){ p.o+=ok; p.fo=fi.fecha; day.f+=ok*m.f; } } }
+    }
+  }
+  let doneA=0, doneF=0;
+  for(const [tipo,code,q,a,f] of cat){ const p=prod.get(code); if(!p) continue; const v=p.a*a+p.o*f; doneA+=p.a*a; doneF+=p.o*f; byTipo[tipo].done+=v; if(p.a>=q && (f<=0 || p.o>=q)) byTipo[tipo].nd+=q; elemDone.set(code,p); }
+  /* Horas por día repartidas como en la planilla piloto: el revestimiento pesa (1+factor) */
+  const w = 1+(Number(cfg.factorForrado)||0), hd = Number(cfg.horasDia)||7;
+  const daily = [...days.values()].sort((x,y)=>x.fecha<y.fecha?-1:1).map(d=>{
+    const den = d.a + w*d.f; const hA = den>0? hd*d.a/den:0, hF = den>0? hd*w*d.f/den:0;
+    return {...d, hA, hF, kgh:(d.a+d.f)/hd};
+  });
+  const sA = daily.reduce((s,d)=>s+d.a,0), sF = daily.reduce((s,d)=>s+d.f,0);
+  const hA = daily.reduce((s,d)=>s+d.hA,0), hF = daily.reduce((s,d)=>s+d.hF,0);
+  const rateA = hA>0.5 ? sA/hA : pil.a, rateF = hF>0.5 ? sF/hF : pil.f;
+  const rateSrcA = hA>0.5 ? "real" : "piloto", rateSrcF = hF>0.5 ? "real" : "piloto";
+  const total = totA+totF, done = doneA+doneF, avance = total? done/total:0;
+  const nDias = daily.length;
+  /* Plan */
+  const inicio = casa.inicio || (daily[0] && daily[0].fecha) || todayS();
+  const ini = firstWorkday(inicio,cfg);
+  let planDias, termino, planSrc;
+  if(casa.termino){ termino=casa.termino; planDias=Math.max(1,workdaysBetween(ini,termino,cfg)); planSrc="Fecha comprometida"; }
+  else { planDias=Math.max(1,Math.ceil((totA/pil.a + totF/pil.f)/hd)); termino = planDias>1? addWorkdays(ini,planDias-1,cfg):ini; planSrc="Rendimiento piloto"; }
+  const corte = st.corte || (daily.length? daily[daily.length-1].fecha : todayS());
+  const planAt = s => Math.min(1, workdaysBetween(ini,s,cfg)/planDias);
+  const planHoy = planAt(corte);
+  const retraso = Math.max(0, planHoy-avance), adelanto = Math.max(0, avance-planHoy);
+  /* Proyección */
+  const pendA = totA-doneA, pendF = totF-doneF;
+  const horasPend = pendA/rateA + pendF/rateF;
+  const diasPend = horasPend/hd;
+  const fechaProy = diasPend<=0 ? (daily.length? daily[daily.length-1].fecha: corte) : addWorkdays(corte, Math.ceil(diasPend-1e-9), cfg);
+  const diffDias = fechaProy>termino ? workdaysBetween(addDays(termino,1),fechaProy,cfg) : -workdaysBetween(addDays(fechaProy,1),termino,cfg);
+  const kgDia = nDias? (sA+sF)/nDias : 0;
+  const kghReal = nDias? (sA+sF)/(nDias*hd) : 0;
+  return {casa,cfg,totA,totF,total,doneA,doneF,done,avance,byTipo:Object.values(byTipo),daily,fichas,issues,prod:elemDone,
+    rateA,rateF,rateSrcA,rateSrcF,pil,inicio:ini,termino,planDias,planSrc,corte,planHoy,planAt,retraso,adelanto,pendA,pendF,horasPend,diasPend,fechaProy,diffDias,kgDia,kghReal,nDias};
+}
+
+/* ---------- Gráficos (SVG) ---------- */
+function svgEl(w,h,inner){ return `<svg viewBox="0 0 ${w} ${h}" role="img">${inner}</svg>`; }
+function attachTip(box, points, fmt){
+  /* points: [{x (svg units), html}] ; nearest-x hover */
+  const svg = box.querySelector("svg"), tip = document.createElement("div"); tip.className="tip"; tip.hidden=true; box.appendChild(tip);
+  const cross = box.querySelector(".cross");
+  const move = ev => {
+    const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal, sx = (ev.clientX-r.left)*vb.width/r.width;
+    let best=null, bd=1e9; for(const p of points){ const d=Math.abs(p.x-sx); if(d<bd){bd=d;best=p;} }
+    if(!best || bd>vb.width/6){ tip.hidden=true; if(cross) cross.setAttribute("opacity",0); return; }
+    tip.innerHTML = best.html; tip.hidden=false;
+    const px = best.x*r.width/vb.width; const tw = tip.offsetWidth;
+    tip.style.left = Math.max(0, Math.min(r.width-tw, px-tw/2))+"px"; tip.style.top = "-6px"; tip.style.transform="translateY(-100%)";
+    if(cross){ cross.setAttribute("x1",best.x); cross.setAttribute("x2",best.x); cross.setAttribute("opacity",1); }
+  };
+  svg.addEventListener("pointermove",move); svg.addEventListener("pointerleave",()=>{tip.hidden=true; if(cross) cross.setAttribute("opacity",0);});
+}
+function chartCurva(box, R){
+  const cfg=R.cfg, end = [R.termino, R.fechaProy, R.corte].sort().pop();
+  const days=[]; for(let s=R.inicio; s<=end; s=addDays(s,1)) if(isWork(s,cfg)) days.push(s);
+  if(days.length<2) days.push(addWorkdays(days[0]||R.inicio,1,cfg));
+  const W=640,H=280,L=40,Rm=16,T=14,B=30, iw=W-L-Rm, ih=H-T-B;
+  const X = i => L + iw*i/(days.length-1), Y = v => T + ih*(1-v);
+  const di = s => { let i=days.indexOf(s); if(i<0){ i=days.findIndex(d=>d>s); i = i<0? days.length-1 : i; } return i; };
+  let g = "";
+  for(const v of [0,.25,.5,.75,1]) g+=`<line x1="${L}" x2="${W-Rm}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${v*100}%</text>`;
+  const step = Math.max(1, Math.ceil(days.length/7));
+  days.forEach((s,i)=>{ if(i%step===0 || i===days.length-1){ const d=D(s); g+=`<text x="${X(i)}" y="${H-10}" text-anchor="middle">${d.getUTCDate()} ${MES[d.getUTCMonth()]}</text>`; }});
+  /* plan */
+  const planPts = days.map((s,i)=>`${X(i)},${Y(R.planAt(s))}`).join(" ");
+  g+=`<polyline points="${planPts}" fill="none" stroke="var(--plan)" stroke-width="2" stroke-dasharray="5 4"/>`;
+  /* real acumulado */
+  let cum=0; const real=[{i:di(R.inicio)-0, v:0, s:null}];
+  const realPts=[]; R.daily.forEach(d=>{ cum+=d.a+d.f; realPts.push({i:di(d.fecha), v:cum/R.total, s:d.fecha, kg:cum}); });
+  const start = {i:Math.max(0,(realPts[0]?realPts[0].i:0)-1), v:0};
+  const line = [start,...realPts];
+  if(realPts.length){
+    g+=`<polyline points="${line.map(p=>`${X(p.i)},${Y(p.v)}`).join(" ")}" fill="none" stroke="var(--armado)" stroke-width="2.5" stroke-linejoin="round"/>`;
+    const last = realPts[realPts.length-1];
+    if(R.avance<1){ const pi = di(R.fechaProy); g+=`<line x1="${X(last.i)}" y1="${Y(last.v)}" x2="${X(pi)}" y2="${Y(1)}" stroke="var(--armado)" stroke-width="2" stroke-dasharray="2 4" opacity=".8"/><circle cx="${X(pi)}" cy="${Y(1)}" r="4" fill="var(--panel)" stroke="var(--armado)" stroke-width="2"/>`; }
+    realPts.forEach(p=> g+=`<circle cx="${X(p.i)}" cy="${Y(p.v)}" r="4" fill="var(--armado)" stroke="var(--panel)" stroke-width="2"/>`);
+  }
+  const ti = di(R.termino);
+  g+=`<line x1="${X(ti)}" x2="${X(ti)}" y1="${T}" y2="${T+ih}" stroke="var(--ink-3)" stroke-width="1"/><text x="${X(ti)-4}" y="${T+10}" text-anchor="end">Término plan</text>`;
+  g+=`<line class="cross" x1="0" x2="0" y1="${T}" y2="${T+ih}" stroke="var(--ink-3)" stroke-width="1" opacity="0"/>`;
+  box.innerHTML = svgEl(W,H,g) + `<div class="legend"><span><i style="background:var(--armado)"></i>Avance real</span><span><i style="background:repeating-linear-gradient(90deg,var(--armado) 0 2px,transparent 2px 5px)"></i>Proyección</span><span><i style="background:repeating-linear-gradient(90deg,var(--plan) 0 5px,transparent 5px 8px)"></i>Plan</span></div>`;
+  const realBy = new Map(realPts.map(p=>[p.s,p]));
+  attachTip(box, days.map((s,i)=>{ const r=realBy.get(s); return {x:X(i), html:`<b>${fmtD(s)}</b><br>Plan: ${pct(R.planAt(s))}${r?`<br>Real: ${pct(r.v)} · ${kg(r.kg)} kg`:""}${s===R.fechaProy?"<br>Término proyectado":""}`}; }));
+}
+function chartDiario(box, R){
+  const ds = R.daily; if(!ds.length){ box.innerHTML=`<div class="empty small">Aún no hay fichas para esta casa.</div>`; return; }
+  const W=640,H=250,L=44,Rm=12,T=12,B=30, iw=W-L-Rm, ih=H-T-B;
+  const max = Math.max(...ds.map(d=>d.a+d.f), R.pil.a*R.cfg.horasDia) * 1.1;
+  const nice = (()=>{ const p=Math.pow(10,Math.floor(Math.log10(max/4))); for(const m of [1,2,2.5,5,10]) if(m*p*4>=max) return m*p; return 10*p; })();
+  const top = nice*Math.ceil(max/nice);
+  const Y = v => T+ih*(1-v/top); const bw = Math.min(46, iw/ds.length*0.6); const X = i => L + iw*(i+.5)/ds.length;
+  let g="";
+  for(let v=0; v<=top+1e-6; v+=nice) g+=`<line x1="${L}" x2="${W-Rm}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${kg(v)}</text>`;
+  ds.forEach((d,i)=>{
+    const x=X(i)-bw/2, ya=Y(d.a), yf=Y(d.a+d.f);
+    if(d.a>0) g+=`<rect x="${x}" y="${ya}" width="${bw}" height="${Y(0)-ya}" fill="var(--armado)"/>`;
+    if(d.f>0) g+=`<path d="M${x},${ya-2} V${yf+4} q0,-4 4,-4 h${bw-8} q4,0 4,4 V${ya-2} Z" fill="var(--forrado)"/>`;
+    else if(d.a>0) g+=`<path d="M${x},${ya+4} q0,-4 4,-4 h${bw-8} q4,0 4,4 Z" fill="var(--armado)"/>`;
+    const dd=D(d.fecha); g+=`<text x="${X(i)}" y="${H-10}" text-anchor="middle">${dd.getUTCDate()} ${MES[dd.getUTCMonth()]}</text>`;
+  });
+  const meta = (R.pil.a*R.cfg.horasDia);
+  g+=`<line x1="${L}" x2="${W-Rm}" y1="${Y(meta)}" y2="${Y(meta)}" stroke="var(--plan)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="${W-Rm}" y="${Y(meta)-5}" text-anchor="end">Ref. piloto estructura ${kg(meta)} kg/día</text>`;
+  box.innerHTML = svgEl(W,H,g)+`<div class="legend"><span><i class="sq" style="background:var(--armado)"></i>Estructura (armado)</span><span><i class="sq" style="background:var(--forrado)"></i>OSB + EPS (revestimiento)</span></div>`;
+  attachTip(box, ds.map((d,i)=>({x:X(i), html:`<b>${fmtD(d.fecha)}</b><br>Estructura: ${kg(d.a)} kg<br>Revestimiento: ${kg(d.f)} kg<br>Total: ${kg(d.a+d.f)} kg · ${nf1.format(d.kgh)} kg/h`})));
+}
+
+/* ---------- Vista: Resumen ---------- */
+function renderResumen(){
+  const el=$("v-resumen");
+  if(st.dbState!=="ok" && !st.loaded.casas){ el.innerHTML = statePanel(); return; }
+  const casa = st.casas.find(c=>c.id===st.casaId);
+  if(!casa){ el.innerHTML = `<div class="panel empty"><h2>Crea la primera casa</h2><p class="adminOnly">Define la casa en fabricación y su fecha de inicio para empezar el seguimiento.</p><a class="adminOnly" href="#obras"><button class="pri">Ir a Configuración</button></a></div>`; return; }
+  const R = computeCasa(casa);
+  const status = R.avance>=1 ? `<span class="chip good">Terminada</span>` : R.retraso>0.05 ? `<span class="chip crit">Atrasada</span>` : R.retraso>0.005 ? `<span class="chip warn">Leve atraso</span>` : `<span class="chip good">Al día</span>`;
+  const diffTxt = R.diffDias>0 ? `${R.diffDias} día${R.diffDias>1?"s":""} hábil${R.diffDias>1?"es":""} después del plan` : R.diffDias<0 ? `${-R.diffDias} día${R.diffDias<-1?"s":""} hábil${R.diffDias<-1?"es":""} antes del plan` : "Coincide con el plan";
+  const diffCls = R.diffDias>0? "crit" : "good";
+  el.innerHTML = `
+  <div class="headline"><h1>${esc(casa.nombre)}</h1><select id="casaSel" aria-label="Casa" style="align-self:center">${casaOptions(st.casaId)}</select><span class="meta">Tipo ${esc(catName(casa.tipo))} · inicio ${fmtDY(R.inicio)} · corte <input type="date" id="corte" value="${R.corte}" aria-label="Fecha de corte"> ${st.corte?`<button class="ghost small" id="corteReset">Usar última ficha</button>`:""}</span>${status}</div>
+  <div class="tiles">
+    <div class="tile"><span class="lbl">Kg fabricados</span><span class="v num">${kg(R.done)} <small>/ ${kg(R.total)} kg</small></span>
+      <div class="bar" title="Estructura y revestimiento"><i style="width:${R.doneA/R.total*100}%;background:var(--armado)"></i><i style="width:${R.doneF/R.total*100}%;background:var(--forrado)"></i></div>
+      <span class="s num">Estructura ${kg(R.doneA)} / ${kg(R.totA)} · Revestimiento ${kg(R.doneF)} / ${kg(R.totF)}</span></div>
+    <div class="tile"><span class="lbl">% de avance</span><span class="v num">${pct(R.avance)}</span><span class="s num">Plan al ${fmtD(R.corte)}: ${pct(R.planHoy)}</span></div>
+    <div class="tile"><span class="lbl">% de retraso</span><span class="v num">${pct(R.retraso)}</span><span class="s">${R.retraso>0?`Faltan ${kg((R.planHoy-R.avance)*R.total)} kg para estar al día`: R.adelanto>0? `Adelanto de ${pct(R.adelanto)} sobre el plan`:"Al día con el plan"}</span></div>
+    <div class="tile"><span class="lbl">Término proyectado</span><span class="v">${R.avance>=1?"Terminada":fmtDY(R.fechaProy)}</span><span class="s">${R.avance>=1?"":`<span class="chip ${diffCls}">${diffTxt}</span><br>`}Plan: ${fmtDY(R.termino)} (${esc(R.planSrc.toLowerCase())})</span></div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><div class="row"><h2 class="grow">Curva de avance</h2><span class="small muted">% de kg de la casa</span></div><div class="chart" id="chCurva"></div></div>
+    <div class="panel"><div class="row"><h2 class="grow">Kg fabricados por día</h2><span class="small muted">${R.nDias} día${R.nDias===1?"":"s"} con ficha</span></div><div class="chart" id="chDia"></div></div>
+  </div>
+  <div class="grid2">
+    <div class="panel" style="display:grid;gap:10px">
+      <h2>Rendimiento y proyección</h2>
+      <div class="tablewrap"><table class="num">
+        <tr><th></th><th class="r">Estructura</th><th class="r">Revestimiento</th></tr>
+        <tr><td>Rendimiento usado (kg/h)</td><td class="r">${nf1.format(R.rateA)} <span class="pill-tipo">${R.rateSrcA}</span></td><td class="r">${nf1.format(R.rateF)} <span class="pill-tipo">${R.rateSrcF}</span></td></tr>
+        <tr><td>Rendimiento piloto (kg/h)</td><td class="r">${nf1.format(R.pil.a)}</td><td class="r">${nf1.format(R.pil.f)}</td></tr>
+        <tr><td>Kg pendientes</td><td class="r">${kg(R.pendA)}</td><td class="r">${kg(R.pendF)}</td></tr>
+        <tr><td>Horas pendientes</td><td class="r">${nf1.format(R.pendA/R.rateA)}</td><td class="r">${nf1.format(R.pendF/R.rateF)}</td></tr>
+      </table></div>
+      <p class="small" style="margin:0">Promedio real: <b class="num">${kg(R.kgDia)} kg/día</b> (${nf1.format(R.kghReal)} kg/h con ${R.cfg.horasDia} h efectivas). Faltan <b class="num">${nf1.format(Math.max(0,R.diasPend))} días hábiles</b> de trabajo al rendimiento usado.</p>
+      <p class="small muted" style="margin:0">Las horas de cada día se reparten entre estructura y revestimiento con el mismo criterio de la planilla piloto: el revestimiento pesa ${nf1.format(1+R.cfg.factorForrado)} veces. Si aún no hay revestimiento registrado, se usa el rendimiento piloto (${esc(R.pil.ref)}).</p>
+    </div>
+    <div class="panel" style="display:grid;gap:10px">
+      <h2>Avance por tipo de elemento</h2>
+      <div class="tablewrap"><table class="num"><tr><th>Tipo</th><th class="r">Kg</th><th style="width:38%">Avance</th></tr>
+      ${R.byTipo.map(b=>`<tr><td>${esc(b.tipo)}</td><td class="r">${kg(b.done)} / ${kg(b.tot)}</td><td><div class="row" style="gap:8px;flex-wrap:nowrap"><div class="bar grow"><i style="width:${b.tot?b.done/b.tot*100:0}%;background:var(--accent)"></i></div><span class="small" style="width:3.6em;text-align:right">${pct(b.tot?b.done/b.tot:0)}</span></div></td></tr>`).join("")}
+      </table></div>
+    </div>
+  </div>
+  ${R.issues.length?`<div class="panel" style="display:grid;gap:8px"><h2>Elementos por revisar <span class="chip warn">${R.issues.length}</span></h2><p class="small muted" style="margin:0">No suman kg hasta corregirlos en la ficha correspondiente (pestaña Fichas → Editar).</p><div class="tablewrap"><table><tr><th>Fecha</th><th>Elemento escrito</th><th>Motivo</th></tr>${R.issues.map(i=>`<tr><td>${fmtD(i.fecha)}</td><td class="mono">${esc(i.raw)}</td><td>${esc(i.why)}</td></tr>`).join("")}</table></div></div>`:""}
+  <div class="panel" style="display:grid;gap:10px">
+    <div class="row"><h2 class="grow">Detalle diario</h2><button id="bExport" hidden>Descargar Excel</button></div>
+    ${R.daily.length?`<div class="tablewrap"><table class="num"><tr><th>Fecha</th><th class="r">Estructura kg</th><th class="r">Revestimiento kg</th><th class="r">Total kg</th><th class="r">kg/h</th><th class="r">Avance acum.</th><th class="r">Plan</th></tr>
+    ${(()=>{let c=0; return R.daily.map(d=>{c+=d.a+d.f; return `<tr><td>${fmtD(d.fecha)}</td><td class="r">${kg(d.a)}</td><td class="r">${kg(d.f)}</td><td class="r"><b>${kg(d.a+d.f)}</b></td><td class="r">${nf1.format(d.kgh)}</td><td class="r">${pct(c/R.total)}</td><td class="r">${pct(R.planAt(d.fecha))}</td></tr>`;}).join("");})()}
+    </table></div>`:`<div class="empty small">Aún no hay fichas registradas para esta casa.</div>`}
+  </div>
+  <details class="panel"><summary>Elementos de la casa (${(CAT[casa.tipo]||[]).length})</summary>
+    <div class="row" style="margin-top:10px"><input type="text" id="elFilter" placeholder="Filtrar por código o tipo"><select id="elEstado"><option value="">Todos</option><option value="pend">Pendientes</option><option value="est">Solo estructura</option><option value="ok">Terminados</option></select></div>
+    <div class="tablewrap" id="elTable" style="margin-top:10px"></div>
+  </details>`;
+  chartCurva($("chCurva"),R); chartDiario($("chDia"),R);
+  $("casaSel").onchange = e => { st.casaId=e.target.value; st.corte=null; saveSel(); render(); };
+  $("corte").onchange = e => { st.corte = e.target.value || null; renderResumen(); };
+  if($("corteReset")) $("corteReset").onclick = () => { st.corte=null; renderResumen(); };
+  const drawEl = () => {
+    const q = norm($("elFilter").value), est=$("elEstado").value, ql=$("elFilter").value.toLowerCase();
+    const rows = (CAT[casa.tipo]||[]).filter(([tipo,code,qq,a,f])=>{
+      const p=R.prod.get(code)||{a:0,o:0}; const done = p.a>=qq && (f<=0||p.o>=qq); const s = done?"ok": p.a>0?"est":"pend";
+      if(est && est!==s) return false; return !ql || norm(code).includes(q) || tipo.toLowerCase().includes(ql); });
+    $("elTable").innerHTML = `<table class="num"><tr><th>Código</th><th>Tipo</th><th class="r">Cant.</th><th class="r">Kg estructura</th><th class="r">Kg revestimiento</th><th>Estado</th></tr>${rows.map(([tipo,code,qq,a,f])=>{const p=R.prod.get(code)||{a:0,o:0}; const done=p.a>=qq&&(f<=0||p.o>=qq);
+      return `<tr><td class="mono">${esc(code)}</td><td>${esc(tipo)}</td><td class="r">${qq}</td><td class="r">${nf1.format(a*qq)}</td><td class="r">${f>0?nf1.format(f*qq):"—"}</td><td>${done?`<span class="chip good">Terminado</span>`:p.a>0?`<span class="chip warn">Falta revestimiento</span>`:`<span class="chip neutral">Pendiente</span>`}</td></tr>`;}).join("")}</table>`;
+  };
+  $("elFilter").oninput=drawEl; $("elEstado").onchange=drawEl; drawEl();
+  setupExport(R);
+}
+function statePanel(){
+  if(st.dbState==="none") return `<div class="panel empty"><h2>Inicia sesión para ver la producción</h2><p>Los datos de producción solo se muestran a personas con sesión iniciada en Claude. Inicia sesión en claude.ai y vuelve a abrir este enlace.</p></div>`;
+  if(st.dbState==="error") return `<div class="panel empty"><h2>No se pudo leer el registro</h2><p>${esc(st.dbErr||"")}. Recarga la página para reintentar.</p></div>`;
+  return `<div class="panel empty"><span class="spin"></span><p>Cargando el registro de producción…</p></div>`;
+}
+
+/* ---------- Exportar a Excel ---------- */
+async function setupExport(R){
+  const b=$("bExport"); if(!b) return;
+  const dl = await claude.use("downloads").catch(()=>null); if(!dl || !window.XLSX){ return; }
+  b.hidden=false;
+  b.onclick = async () => {
+    const wb = XLSX.utils.book_new();
+    const reg=[]; for(const fi of R.fichas) for(const it of fi.items||[]){ if(itemCasa(fi,it)!==R.casa.id) continue; const m=match(R.casa.tipo,it); const q=Math.max(1,Number(it.q)||1);
+      if(it.e) reg.push({Fecha:fi.fecha,Hoja:fi.hoja||"",Casa:R.casa.nombre,Tipo:m?m.tipo:"",Elemento:m?m.code:it.raw,Cantidad:q,Accion:"Armado",Kg:m?+(m.a*q).toFixed(2):0,Obs:it.obs||""});
+      if(it.o) reg.push({Fecha:fi.fecha,Hoja:fi.hoja||"",Casa:R.casa.nombre,Tipo:m?m.tipo:"",Elemento:m?m.code:it.raw,Cantidad:q,Accion:"Revestimiento",Kg:m?+(m.f*q).toFixed(2):0,Obs:it.obs||""}); }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(reg), "Produccion");
+    let c=0; XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(R.daily.map(d=>{c+=d.a+d.f; return {Fecha:d.fecha,"Kg Armado":+d.a.toFixed(1),"Kg Revestimiento":+d.f.toFixed(1),"Horas Armado":+d.hA.toFixed(2),"Horas Revestimiento":+d.hF.toFixed(2),"Kg total":+(d.a+d.f).toFixed(1),"kg/h":+d.kgh.toFixed(1),"Avance acum %":+(c/R.total*100).toFixed(1),"Plan %":+(R.planAt(d.fecha)*100).toFixed(1)};})), "Diario");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{Casa:R.casa.nombre,Tipo:R.casa.tipo,"Kg total":+R.total.toFixed(1),"Kg fabricados":+R.done.toFixed(1),"Avance %":+(R.avance*100).toFixed(1),"Plan %":+(R.planHoy*100).toFixed(1),"Retraso %":+(R.retraso*100).toFixed(1),"Fecha corte":R.corte,"Termino plan":R.termino,"Termino proyectado":R.fechaProy}]), "Resumen");
+    const data = XLSX.write(wb,{bookType:"xlsx",type:"array"});
+    try { await dl.save({filename:`Produccion ${R.casa.nombre} ${R.corte}.xlsx`, data:new Blob([data],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})}); }
+    catch(e){ if(e && e.code!=="cancelled" && e.code!=="declined") toast("No se pudo descargar: "+(e.message||e.code)); }
+  };
+}
+
+/* ---------- Vista: Cargar ficha ---------- */
+function casaOptions(sel){ return st.casas.map(c=>`<option value="${esc(c.id)}"${c.id===sel?" selected":""}>${esc(c.nombre)}${c.numero&&!String(c.nombre).includes(c.numero)?` · ${esc(c.numero)}`:""} (${esc(catName(c.tipo))})</option>`).join(""); }
+function cgCasa(){ return st.casas.find(c=>c.id===$("cgCasa").value); }
+function newDraft(){ return {items:[]}; }
+function renderCargar(){
+  const sinCasa = st.draft && !st.draft.casaId && st.draft.numero;
+  $("cgCasa").innerHTML = (sinCasa?`<option value="" selected>— Elige la casa —</option>`:"") + (casaOptions(sinCasa? "" : (st.draft?.casaId || st.cgSel || st.casaId)) || `<option value="">Crea una casa primero</option>`);
+  if(!$("cgFecha").value) $("cgFecha").value = todayS();
+  $("cgTitle").textContent = st.editId ? "Editar ficha" : "Cargar ficha de producción";
+  const tipos=[...new Set(st.casas.map(x=>x.tipo))]; const seenC=new Set();
+  $("dlCodes").innerHTML = tipos.flatMap(tp=>(CAT[tp]||[]).filter(r=>!seenC.has(r[1])&&seenC.add(r[1])).map(r=>`<option value="${esc(r[1])}">${esc(r[0])}</option>`)).join("");
+  renderReview();
+}
+function renderReview(){
+  const box=$("cgReview"), d=st.draft, c=cgCasa();
+  if(!d || !d.items.length){ box.innerHTML = st.editId? "" : `<div class="notice small">Cada fila de la ficha es un elemento. El ✓ en ESTRUCTURA suma los kg de metalcon (armado) y el ✓ en OSB suma los kg de OSB + EPS (revestimiento), según el catálogo del tipo de casa.</div>`; return; }
+  const Rc = new Map(); const RofC = rc => { if(!rc) return null; if(!Rc.has(rc.id)) Rc.set(rc.id, computeCasa(rc)); return Rc.get(rc.id); };
+  const seen = new Map(); let tA=0,tF=0, nBad=0, nWarn=0; const porCasa=new Map();
+  const rows = d.items.map((it,i)=>{
+    const rc = st.casas.find(x=>x.id===(it.casaId||(c&&c.id))); const R = RofC(rc);
+    const m = rc? match(rc.tipo,it):null; const q=Math.max(1,Number(it.q)||1);
+    let status="", cls="";
+    if(!(it.raw||"").trim()){ status=`<span class="chip neutral">Vacía</span>`; }
+    else if(!rc){ status=`<span class="chip warn">Elige la casa</span>`; cls="flag"; nWarn++; }
+    else if(!m){ status=`<span class="chip crit">No está en el catálogo</span>`; cls="bad"; nBad++; }
+    else {
+      const k=rc.id+"|"+m.code; const prev = (R && !st.editId) ? (R.prod.get(m.code)||{a:0,o:0}) : {a:0,o:0};
+      const dup = seen.has(k); seen.set(k,true);
+      if(dup){ status=`<span class="chip warn">Repetido en la ficha</span>`; cls="flag"; nWarn++; }
+      else if(it.e && prev.a>=m.q){ status=`<span class="chip warn">Estructura ya registrada</span>`; cls="flag"; nWarn++; }
+      else if(it.o && m.f<=0){ status=`<span class="chip warn">${noForrado(m.code)?"Revestimiento no se hace en taller":"Sin revestimiento en catálogo"}</span>`; cls="flag"; nWarn++; }
+      else status=`<span class="chip good">${esc(m.tipo)}</span>`;
+      if(it.e) tA+=m.a*q; if(it.o) tF+=m.f*q; porCasa.set(rc.id,(porCasa.get(rc.id)||0)+(it.e?m.a*q:0)+(it.o?m.f*q:0));
+    }
+    const kgRow = m ? (it.e?m.a*q:0)+(it.o?m.f*q:0) : 0;
+    return `<tr class="${cls}"><td class="num muted">${i+1}</td>
+      <td><input class="elinput" list="dlCodes" data-i="${i}" data-k="raw" value="${esc(it.raw||"")}" aria-label="Elemento fila ${i+1}">${m && norm(m.code)===norm(it.raw)&&m.code!==it.raw?`<div class="small muted">= ${esc(m.code)}</div>`:""}</td>
+      <td><select data-i="${i}" data-k="casaId" aria-label="Casa fila ${i+1}" style="max-width:11em">${rc?"":`<option value="" selected>— Casa —</option>`}${st.casas.map(x=>`<option value="${esc(x.id)}"${rc&&x.id===rc.id?" selected":""}>${esc(x.nombre)}</option>`).join("")}</select></td>
+      <td style="text-align:center"><input type="checkbox" class="ck" data-i="${i}" data-k="e" ${it.e?"checked":""} aria-label="Estructura"></td>
+      <td style="text-align:center"><input type="checkbox" class="ck" data-i="${i}" data-k="o" ${it.o?"checked":""} aria-label="OSB"></td>
+      <td style="text-align:center"><input type="checkbox" class="ck" data-i="${i}" data-k="v" ${it.v?"checked":""} aria-label="Ventana"></td>
+      <td><input type="number" min="1" step="1" data-i="${i}" data-k="q" value="${q}" aria-label="Cantidad" style="width:4em"></td>
+      <td class="r num">${kgRow?nf1.format(kgRow):"—"}</td>
+      <td>${status}</td>
+      <td><input type="text" data-i="${i}" data-k="obs" value="${esc(it.obs||"")}" placeholder="Obs." style="width:9em"></td>
+      <td><button class="ghost danger" data-del="${i}" aria-label="Quitar fila">✕</button></td></tr>`;
+  }).join("");
+  /* La barra de Guardar es persistente: re-dibujar la tabla al salir de un campo no debe reemplazar el botón que se está pulsando */
+  let body=$("rvBody"), foot=$("rvFoot");
+  if(!body||!foot){
+    box.innerHTML = `<div id="rvBody"></div><div class="row" id="rvFoot" style="margin-top:12px"><span class="grow small" id="rvSum"></span><button id="bCancel">Descartar</button><button class="pri" id="bSave">Guardar ficha</button></div>`;
+    body=$("rvBody"); foot=$("rvFoot");
+    foot.querySelectorAll("button").forEach(b=>b.addEventListener("mousedown",e=>e.preventDefault()));
+    $("bCancel").onclick=()=>{ st.draft=null; st.editId=null; if(!nextDraft()) resetCargar(); };
+    $("bSave").onclick=saveDraft;
+  }
+  const qn=(st.queue||[]).length;
+  const banner = d.fuente==="foto" ? `<div class="notice" style="display:grid;gap:6px"><div class="row"><b class="grow">${esc(d.hoja||"Ficha")} leída de la foto${d.fotoNombre?` <span class="small muted">${esc(d.fotoNombre)}</span>`:""}</b>${qn?`<span class="chip neutral">${qn} ficha${qn===1?"":"s"} más en cola</span>`:""}</div>
+      <span class="small">Claude leyó ${d.items.length} elemento${d.items.length===1?"":"s"}${d.casaTxt?` · CASA Y TIPO: "${esc(d.casaTxt)}"`:""}${d.numero?` · N° de casa: <b>${esc(d.numero)}</b>`:` · no encontró número de casa`}. Compara con la foto antes de guardar.${qn?" Al guardar o descartar pasa a la siguiente.":""}</span>
+      ${d.foto?`<details><summary class="small" style="font-family:inherit;font-size:13px">Ver foto</summary><img src="${d.foto}" alt="Foto de la ficha" style="margin-top:8px;border-radius:4px;max-height:70vh"></details>`:""}</div>` : "";
+  const casaWarn = d.numero && !d.casaId ? `<div class="notice warn" style="display:grid;gap:8px"><span>La ficha dice casa <b>${esc(d.numero)}</b>, pero no hay ninguna casa con ese número. Elige la casa arriba o créala ahora:</span>
+      <div class="row"><input type="text" id="ncNombre" value="${esc(`${catName(d.tipoGuess||tiposList()[0])} ${d.numero}`)}" aria-label="Nombre de la casa nueva"><select id="ncTipo" aria-label="Tipo">${tiposList().map(tp=>`<option value="${esc(tp)}"${tp===(d.tipoGuess||tiposList()[0])?" selected":""}>${esc(catName(tp))}</option>`).join("")}</select><button class="pri" id="ncOk">Crear casa ${esc(d.numero)}</button></div></div>` : "";
+  body.innerHTML = `
+    ${banner}${casaWarn}
+    ${d.note?`<div class="notice ${d.noteCls||""}">${d.note}</div>`:""}
+    <div class="tablewrap" style="margin-top:10px"><table>
+      <tr><th>#</th><th>Elemento</th><th>Casa</th><th>Estructura</th><th>OSB</th><th>Ventana</th><th>Cant.</th><th class="r">Kg</th><th>Estado</th><th>Obs.</th><th></th></tr>${rows}
+      <tr><td></td><td colspan="6"><button class="ghost" id="bAddRow">+ Agregar fila</button></td><td class="r num"><b>${nf1.format(tA+tF)}</b></td><td colspan="3" class="small muted num">Estructura ${nf1.format(tA)} · Revestimiento ${nf1.format(tF)}${porCasa.size>1?`<br>${[...porCasa].map(([id,v])=>`${esc((st.casas.find(x=>x.id===id)||{}).nombre||"")}: ${nf1.format(v)}`).join(" · ")}`:""}</td></tr>
+    </table></div>`;
+  $("rvSum").innerHTML = `${nBad?`<span class="chip crit">${nBad} sin identificar</span> `:""}${nWarn?`<span class="chip warn">${nWarn} por revisar</span> `:""}${!nBad&&!nWarn?`<span class="chip good">Todo identificado</span>`:"Las filas marcadas se guardan igual, pero no suman kg hasta corregirlas."}`;
+  const bs=$("bSave"); if(!bs.dataset.busy){ bs.disabled=!c; bs.textContent = st.editId?"Guardar cambios":"Guardar ficha"; }
+  body.querySelectorAll("select[data-i]").forEach(sel=>sel.addEventListener("change",()=>{ const it=d.items[+sel.dataset.i]; if(it){ it.casaId=sel.value; it.q=defaultQ(it.raw,sel.value)||it.q; } renderReview(); }));
+  body.querySelectorAll("input[data-i]").forEach(inp=>{
+    const i=+inp.dataset.i, k=inp.dataset.k;
+    const commit = ()=>{ const it=d.items[i]; if(!it) return; if(inp.type==="checkbox") it[k]=inp.checked; else if(k==="q") it.q=Math.max(1,parseInt(inp.value)||1); else it[k]=inp.value; };
+    if(inp.type!=="checkbox") inp.addEventListener("input", commit);
+    inp.addEventListener("change", ()=>{ commit(); renderReview(); });
+  });
+  body.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{ d.items.splice(+b.dataset.del,1); renderReview(); });
+  if($("ncOk")) $("ncOk").onclick=crearCasaDesdeFicha;
+  $("bAddRow").onclick=()=>{ d.items.push({raw:"",e:true,o:false,v:false,q:1}); renderReview(); body.querySelectorAll(".elinput")[d.items.length-1]?.focus(); };
+}
+function resetCargar(){ $("cgHoja").value=""; $("cgSup").value=""; $("cgFecha").value=todayS(); $("fotoMsg").textContent=""; $("xlsMsg").textContent=""; renderCargar(); }
+function ensureDraft(){ if(!st.draft){ st.draft=newDraft(); st.draft.casaId=$("cgCasa").value||null; } return st.draft; }
+function defaultQ(code,casaId){ const c=casaId? st.casas.find(x=>x.id===casaId) : cgCasa(); const m=c&&lookup(c.tipo,code); return m? m.q : 1; }
+async function saveDraft(){
+  const c=cgCasa(); const d=st.draft; if(!c||!d) return;
+  const fecha=$("cgFecha").value; if(!fecha){ toast("Indica la fecha de la ficha"); return; }
+  const items = d.items.filter(it=>(it.raw||"").trim()).map(it=>{ const rc=st.casas.find(x=>x.id===(it.casaId||c.id))||c; const m=lookup(rc.tipo,it.raw); return {casaId:rc.id, raw:it.raw.trim(), c:m?m.code:null, e:!!it.e, o:!!it.o, v:!!it.v, q:Math.max(1,Number(it.q)||1), obs:it.obs||""}; });
+  if(!items.length){ toast("La ficha no tiene elementos"); return; }
+  const doc = {casaId:c.id, numeroCasa:d.numero||"", fecha, hoja:$("cgHoja").value.trim(), supervisor:$("cgSup").value.trim(), fuente:d.fuente||"manual", items, actualizado:Date.now()};
+  const b=$("bSave"); b.disabled=true; b.dataset.busy="1"; b.innerHTML=`<span class="spin"></span> Guardando`;
+  try{
+    if(st.editId) await st.db.collection("fichas").doc(st.editId).update(doc);
+    else { doc.creado=Date.now(); await st.db.collection("fichas").add(doc); }
+    const wasEdit=!!st.editId; st.draft=null; st.editId=null; st.casaId=c.id; saveSel(); delete b.dataset.busy;
+    if(!wasEdit && nextDraft()){ toast(`Ficha guardada. Sigue ${st.draft.hoja||"la siguiente"}`); } else { toast(wasEdit?"Ficha actualizada":"Ficha guardada"); resetCargar(); location.hash="#produccion"; }
+  }catch(e){ delete b.dataset.busy; b.disabled=false; b.textContent=st.editId?"Guardar cambios":"Guardar ficha"; toast("No se pudo guardar: "+(e.message||e.code)); }
+}
+
+/* Lectura de fotos con Claude: cada foto es una ficha distinta */
+function casaPorNumero(numero){
+  const k=norm(numero); if(!k) return null;
+  return st.casas.find(c=>norm(c.numero)===k) || st.casas.find(c=>String(c.nombre||"").split(/[\s·\-_/]+/).some(w=>norm(w)===k)) || null;
+}
+function tipoDesdeTexto(txt){
+  const s=norm(txt); if(!s) return null;
+  return tiposList().find(t=>s.includes(norm(t))||s.includes(norm(catName(t)))) || null;
+}
+function activateDraft(d){
+  st.draft=d; st.editId=null;
+  $("cgFecha").value=d.fecha||todayS(); $("cgHoja").value=d.hoja||""; $("cgSup").value=d.sup||"";
+  if(d.casaId) st.cgSel=d.casaId;
+  renderCargar();
+}
+function nextDraft(){ const n=(st.queue||[]).shift(); if(n){ activateDraft(n); return true; } st.batch=null; return false; }
+async function readPhotos(files){
+  const msg=$("fotoMsg");
+  const sample = await claude.use("sample").catch(()=>null);
+  if(!sample){ msg.textContent="La lectura de fotos no está disponible aquí. Usa el Excel o escribe los elementos."; return; }
+  const lim = await sample.limits().catch(()=>null);
+  if(!lim || !lim.images){ msg.textContent="Esta vista no permite enviar imágenes a Claude."; return; }
+  const okType = f => !f.type || !lim.images.mediaTypes || lim.images.mediaTypes.includes(f.type);
+  const okSize = f => !lim.images.maxInputBytes || f.size <= lim.images.maxInputBytes;
+  const bad=[...files].filter(f=>!okType(f)||!okSize(f));
+  const imgs=[...files].filter(f=>okType(f)&&okSize(f));
+  if(!imgs.length && !bad.length){ msg.textContent="No llegó ninguna foto. Vuelve a elegirla."; return; }
+  if(!imgs.length){ const m=`No se pudo usar ${bad.length>1?"las fotos":"la foto"}: debe ser JPG o PNG de menos de ${Math.round((lim.images.maxInputBytes||0)/1048576)} MB.`; msg.textContent=m; toast(m); return; }
+  const tipos=[...new Set([...st.casas.map(c=>c.tipo), ...tiposList()])];
+  const codes = [...new Set(tipos.flatMap(t=>(CAT[t]||[]).map(r=>r[1])))].join(", ");
+  const prompt = `Esta imagen es la foto de UNA hoja de la ficha impresa "PRODUCCION DIARIA DMI-A" de un taller de paneles de metalcon, llenada a mano.
+La tabla tiene columnas: Item, Tipo elemento (código escrito a mano), Obs, ESTRUCTURA, OSB, VENTANA, OBSERVACIONES. Un ✓, una "v" o un trazo "/" en una columna significa que esa etapa se hizo.
+Transcribe TODAS las filas con un código escrito, en orden. Ignora filas vacías.
+Códigos válidos del catálogo: ${codes}.
+Si lo escrito corresponde claramente a un código del catálogo (por ejemplo "BWZ-T2:1" o "BW2 T2.1" es "BW2-T2.1", "LZ1" es "L21"), devuelve el código tal como está en el catálogo. Si no corresponde a ninguno (por ejemplo una palabra como "Escalera" o un código que no existe), devuélvelo tal cual está escrito y pon "dudoso": true.
+Lee también: la fecha manuscrita (formato DD.MM.AAAA); el número de casa que está escrito en un cuadro de la ficha, normalmente un código corto como "B1", "A3" o "C12" (puede estar en los cuadros bajo FECHA, junto a CASA Y TIPO o en otro recuadro); el texto de "CASA Y TIPO" (por ejemplo "Osorno N."); y el nombre del supervisor.
+Responde solo JSON con esta forma:
+{"fecha":"AAAA-MM-DD" o null,"numero_casa":"B1" o null,"casa_tipo":texto o null,"supervisor":texto o null,"items":[{"codigo":"...","estructura":true/false,"osb":true/false,"ventana":true/false,"obs":"texto o vacío","dudoso":true/false}]}`;
+  const tiers = lim.modelTiers || ["default","complex","quick"];
+  const cur = st.draft && st.draft.items.some(it=>(it.raw||"").trim()) ? st.draft : null;
+  st.queue ||= []; st.batch={total:imgs.length+(st.queue.length), n:0};
+  let first=!cur, ok=0, fails=[];
+  for(let i=0;i<imgs.length;i++){
+    msg.innerHTML=`<span class="spin"></span> Leyendo hoja ${i+1} de ${imgs.length}…`;
+    try{
+      const r = await sample.json(prompt,{images:[imgs[i]], ...(tiers.includes("complex")?{modelTier:"complex"}:{})});
+      const its = (r && Array.isArray(r.items))? r.items:[];
+      if(!its.length){ fails.push(`${imgs[i].name||"Hoja "+(i+1)}: no se encontraron elementos`); continue; }
+      const numero = r.numero_casa ? String(r.numero_casa).trim().toUpperCase() : "";
+      const casa = casaPorNumero(numero);
+      const d = {items:[], fuente:"foto", fecha:(r.fecha&&/^\d{4}-\d{2}-\d{2}$/.test(r.fecha))?r.fecha:todayS(), hoja:`Hoja ${i+1}`, sup:r.supervisor||"",
+        casaId:casa?casa.id:null, numero, tipoGuess:tipoDesdeTexto(r.casa_tipo), casaTxt:r.casa_tipo||"", foto:URL.createObjectURL(imgs[i]), fotoNombre:imgs[i].name||""};
+      its.forEach(x=>d.items.push({raw:String(x.codigo||"").trim(), e:!!x.estructura, o:!!x.osb, v:!!x.ventana, q:defaultQ(x.codigo, d.casaId), obs:x.obs||"", dudoso:!!x.dudoso}));
+      ok++;
+      if(first){ first=false; activateDraft(d); } else { st.queue.push(d); renderReview(); }
+    }catch(e){
+      if(e && (e.code==="not_granted"||e.code==="rate_limited")){ const m = e.code==="not_granted" ? "Sin permiso para usar Claude en esta página. Revísalo en el menú Permisos del artefacto." : "Demasiadas lecturas seguidas. Espera un momento e intenta de nuevo con las hojas que faltan."; fails.push(m); break; }
+      fails.push(`${imgs[i].name||"Hoja "+(i+1)}: ${e&&(e.message||e.code)||e}`);
+    }
+  }
+  msg.textContent = fails.length ? `Leídas ${ok} de ${imgs.length}. ${fails.join(" · ")}` : "";
+  if(fails.length) toast(`No se pudieron leer ${imgs.length-ok} hoja${imgs.length-ok===1?"":"s"}`);
+  if(cur && ok) toast(`${ok} ficha${ok===1?"":"s"} en cola: aparecerán al guardar la actual`);
+  renderReview();
+}
+async function crearCasaDesdeFicha(){
+  const d=st.draft; if(!d||!d.numero) return;
+  const tipo=$("ncTipo").value; const nombre=$("ncNombre").value.trim()||`${catName(tipo)} ${d.numero}`;
+  try{ const ref=await st.db.collection("casas").add({nombre, numero:d.numero, tipo, inicio:$("cgFecha").value||todayS(), termino:null, creado:Date.now()});
+    d.casaId=ref.id; st.cgSel=ref.id; for(const it of d.items) if(!it.casaId) it.q=defaultQ(it.raw, ref.id); toast(`Casa ${nombre} creada`);
+    setTimeout(renderCargar,60);
+  }catch(e){ toast("No se pudo crear la casa: "+(e.message||e.code)); }
+}
+/* Lectura del Excel de la ficha */
+async function readXls(file){
+  const msg=$("xlsMsg"); if(!window.XLSX){ msg.textContent="No se cargó el lector de Excel."; return; }
+  try{
+    const wb = XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true});
+    const d=ensureDraft(); d.fuente="excel"; let n=0;
+    for(const name of wb.SheetNames){
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:null,raw:true});
+      let h=-1, col={};
+      for(let r=0;r<rows.length;r++){ const row=rows[r]||[]; const j=row.findIndex(v=>/tipo\s*elemento/i.test(String(v||""))); if(j>=0){ h=r; row.forEach((v,k)=>{ const s=String(v||"").toUpperCase().trim(); if(/^TIPO/.test(s)) col.t=k; else if(s==="OBS") col.ob=k; else if(/ESTRUCTURA/.test(s)) col.e=k; else if(s==="OSB") col.o=k; else if(/VENTANA/.test(s)) col.v=k; else if(/OBSERVACIONES/.test(s)) col.obs=k; }); break; } }
+      if(h<0) continue;
+      for(let r=0;r<Math.min(h,8);r++){ const row=rows[r]||[]; row.forEach((v,k)=>{ if(/^FECHA/i.test(String(v||"").trim())){ for(let rr=r;rr<Math.min(r+5,h);rr++){ const x=(rows[rr]||[])[k+(rr===r?1:0)] ?? (rows[rr]||[])[k]; const ds=toDateS(x); if(ds){ $("cgFecha").value=ds; return; } } } }); }
+      for(let r=h+1;r<rows.length;r++){ const row=rows[r]||[]; if(/supervisor/i.test(String(row[0]||""))) break; const t=row[col.t]; if(t==null||String(t).trim()==="") continue;
+        const mk = k => k!=null && row[k]!=null && String(row[k]).trim()!=="" && !/^(no|0|false)$/i.test(String(row[k]).trim());
+        d.items.push({raw:String(t).trim(), e:mk(col.e), o:mk(col.o), v:mk(col.v), q:defaultQ(t), obs:[row[col.ob],row[col.obs]].filter(Boolean).join(" ")}); n++; }
+    }
+    msg.textContent = n? `${n} elementos leídos.` : "No encontré filas con elementos en el Excel.";
+    d.note = n? `Se leyeron ${n} elementos del Excel "${esc(file.name)}". Revisa y guarda.`:""; renderReview();
+  }catch(e){ msg.textContent="No se pudo leer el Excel: "+(e.message||e); }
+}
+function toDateS(x){
+  if(x instanceof Date && !isNaN(x)) return S(new Date(Date.UTC(x.getFullYear(),x.getMonth(),x.getDate())));
+  if(typeof x==="number" && x>30000 && x<80000){ return S(new Date(Date.UTC(1899,11,30)+x*864e5)); }
+  const m = String(x||"").match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})/); if(m){ const y=m[3].length===2?"20"+m[3]:m[3]; return `${y}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`; }
+  return null;
+}
+
+/* ---------- Vista: Fichas ---------- */
+function renderFichas(){
+  const el=$("v-fichas");
+  if(st.dbState!=="ok"){ el.innerHTML=statePanel(); return; }
+  const F = st.ff ||= {casa:"", desde:"", hasta:"", n:30};
+  st.ffOpen ||= new Set();
+  const casaBy = id => st.casas.find(c=>c.id===id);
+  const list = st.fichas.filter(f=>(!F.casa||fichaCasas(f).includes(F.casa)) && (!F.desde||f.fecha>=F.desde) && (!F.hasta||f.fecha<=F.hasta))
+    .sort((a,b)=>a.fecha<b.fecha?1:a.fecha>b.fecha?-1:(b.creado||0)-(a.creado||0));
+  const shown=list.slice(0,F.n);
+  const ck=v=>v?`<span aria-label="Sí">✓</span>`:"";
+  const detail = f => {
+    const rows=(f.items||[]).map(it=>{ const c=casaBy(itemCasa(f,it)); const m=c&&match(c.tipo,it); const q=Math.max(1,+it.q||1); return {it,c,m,kg:(m&&it.e?m.a*q:0)+(m&&it.o&&m.f>0?m.f*q:0)}; });
+    const porCasa=new Map(); for(const r of rows){ const k=r.c?r.c.nombre:"Sin casa"; porCasa.set(k,(porCasa.get(k)||0)+r.kg); }
+    return `<div style="display:grid;gap:8px;padding-block:6px 10px">
+      <div class="row small"><span class="grow muted">${esc(f.supervisor||"Sin supervisor")}${f.fuente?` · cargada desde ${esc(f.fuente)}`:""} · ${rows.length} elemento${rows.length===1?"":"s"} · ${[...porCasa].map(([n,v])=>`${esc(n)} ${kg(v)} kg`).join(" · ")}</span>
+        <button data-edit="${esc(f.id)}">Editar</button><span data-delwrap="${esc(f.id)}"><button class="ghost danger" data-delask="${esc(f.id)}">Eliminar</button></span></div>
+      <div class="tablewrap"><table class="num"><tr><th>#</th><th>Casa</th><th>Elemento</th><th>Tipo</th><th style="text-align:center">Estructura</th><th style="text-align:center">OSB</th><th class="r">Kg</th><th>Obs.</th></tr>
+      ${rows.map((r,i)=>`<tr${r.m?"":` class="bad"`}><td class="muted">${i+1}</td><td>${r.c?esc(r.c.nombre):`<span class="chip crit">Sin casa</span>`}</td><td class="mono">${esc(r.m?r.m.code:(r.it.raw||r.it.c))}</td><td class="small">${r.m?esc(r.m.tipo):`<span class="chip crit">No está en el catálogo</span>`}</td><td style="text-align:center">${ck(r.it.e)}</td><td style="text-align:center">${ck(r.it.o)}</td><td class="r">${r.kg?nf1.format(r.kg):"—"}</td><td class="small">${esc(r.it.obs||"")}</td></tr>`).join("")}
+      </table></div></div>`;
+  };
+  el.innerHTML = `<div class="panel" style="display:grid;gap:12px">
+    <div class="headline"><h1>Fichas registradas</h1><span class="meta">Todas las casas · ${list.length} ficha${list.length===1?"":"s"}</span></div>
+    <div class="row">
+      <label class="row small" for="ffCasa"><span class="lbl">Casa</span><select id="ffCasa"><option value="">Todas</option>${st.casas.map(c=>`<option value="${esc(c.id)}"${c.id===F.casa?" selected":""}>${esc(c.nombre)}</option>`).join("")}</select></label>
+      <label class="row small" for="ffDesde"><span class="lbl">Desde</span><input type="date" id="ffDesde" value="${F.desde}"></label>
+      <label class="row small" for="ffHasta"><span class="lbl">Hasta</span><input type="date" id="ffHasta" value="${F.hasta}"></label>
+      ${F.casa||F.desde||F.hasta?`<button class="ghost" id="ffClear">Quitar filtros</button>`:""}
+      <span class="grow"></span><a href="#cargar"><button class="pri">Cargar ficha</button></a>
+    </div>
+    ${shown.length?`<div class="tablewrap"><table><tr><th>Fecha</th><th>Ficha</th><th>Casas</th><th></th></tr>
+    ${shown.map(f=>{ const open=st.ffOpen.has(f.id); const cs=fichaCasas(f).map(id=>casaBy(id)); const bad=(f.items||[]).some(it=>{ const c=casaBy(itemCasa(f,it)); return !c||!match(c.tipo,it); });
+      return `<tr data-row="${esc(f.id)}" style="cursor:pointer"><td>${fmtDY(f.fecha)}</td><td><b>${esc(f.hoja||"Ficha")}</b>${bad?` <span class="chip crit" title="Tiene elementos sin identificar">revisar</span>`:""}</td><td>${cs.map(c=>c?esc(c.nombre):`<span class="chip crit">Sin casa</span>`).join(", ")}</td><td style="text-align:right"><button class="ghost" data-open="${esc(f.id)}" aria-expanded="${open}">${open?"Cerrar ▴":"Abrir ▾"}</button></td></tr>
+        ${open?`<tr><td colspan="4" style="background:var(--bg)">${detail(f)}</td></tr>`:""}`; }).join("")}
+    </table></div>
+    ${list.length>shown.length?`<div class="row"><span class="grow small muted">Mostrando ${shown.length} de ${list.length}</span><button id="ffMore">Ver 30 más</button></div>`:""}`
+    :`<div class="empty">${st.fichas.length?"Ninguna ficha coincide con los filtros.":`No hay fichas registradas. <a href="#cargar">Cargar la primera</a>`}</div>`}
+  </div>`;
+  const set=(k,v)=>{ F[k]=v; F.n=30; renderFichas(); };
+  $("ffCasa").onchange=e=>set("casa",e.target.value); $("ffDesde").onchange=e=>set("desde",e.target.value); $("ffHasta").onchange=e=>set("hasta",e.target.value);
+  if($("ffClear")) $("ffClear").onclick=()=>{ st.ff=null; renderFichas(); };
+  if($("ffMore")) $("ffMore").onclick=()=>{ F.n+=30; renderFichas(); };
+  const toggle=id=>{ if(st.ffOpen.has(id)) st.ffOpen.delete(id); else st.ffOpen.add(id); renderFichas(); };
+  el.querySelectorAll("[data-row]").forEach(tr=>tr.onclick=e=>{ if(e.target.closest("button")) return; toggle(tr.dataset.row); });
+  el.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>toggle(b.dataset.open));
+  el.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{ const f=st.fichas.find(x=>x.id===b.dataset.edit); if(!f) return;
+    st.editId=f.id; st.draft={items:(f.items||[]).map(it=>({...it, raw:it.raw||it.c, casaId:itemCasa(f,it)})), fuente:f.fuente, casaId:f.casaId, note:`Editando la ficha del ${fmtDY(f.fecha)}${f.hoja?` (${esc(f.hoja)})`:""}.`};
+    $("cgFecha").value=f.fecha; $("cgHoja").value=f.hoja||""; $("cgSup").value=f.supervisor||""; location.hash="#cargar"; });
+  el.querySelectorAll("[data-delask]").forEach(b=>b.onclick=()=>{ const id=b.dataset.delask; const w=el.querySelector(`[data-delwrap="${CSS.escape(id)}"]`);
+    w.innerHTML=`<span class="small">¿Eliminar esta ficha?</span> <button class="ghost danger" data-delok>Sí</button><button class="ghost" data-delno>No</button>`;
+    w.querySelector("[data-delno]").onclick=renderFichas;
+    w.querySelector("[data-delok]").onclick=async()=>{ try{ await st.db.collection("fichas").doc(id).delete(); st.ffOpen.delete(id); toast("Ficha eliminada"); }catch(e){ toast("No se pudo eliminar: "+(e.message||e.code)); } }; });
+}
+
+/* ---------- Vista: Configuración ---------- */
+function renderObras(){
+  const el=$("v-obras");
+  if(st.dbState!=="ok"){ el.innerHTML=statePanel(); return; }
+  const cfg=st.cfg;
+  el.innerHTML = `
+  <div class="panel" style="display:grid;gap:12px"><h1>Casas en fabricación</h1>
+    ${st.casas.length?`<div class="tablewrap"><table class="num"><tr><th>Casa</th><th>N°</th><th>Tipo</th><th>Inicio</th><th>Término comprometido</th><th class="r">Kg total</th><th></th></tr>
+    ${st.casas.map(c=>{ const t=(CAT[c.tipo]||[]).reduce((s,r)=>s+r[2]*(r[3]+r[4]),0); return `<tr><td><b>${esc(c.nombre)}</b></td><td class="mono">${esc(c.numero||"—")}</td><td>${esc(catName(c.tipo))}</td><td>${fmtDY(c.inicio)}</td><td>${c.termino?fmtDY(c.termino):`<span class="muted">Según rendimiento piloto</span>`}</td><td class="r">${kg(t)}</td><td style="white-space:nowrap"><button class="ghost" data-ced="${esc(c.id)}">Editar</button><span data-cdw="${esc(c.id)}"><button class="ghost danger" data-cdel="${esc(c.id)}">Eliminar</button></span></td></tr>`; }).join("")}</table></div>`:`<p class="muted" style="margin:0">Aún no hay casas.</p>`}
+    <h2 id="casaFormT">Nueva casa</h2>
+    <div class="form" id="casaForm">
+      <label>Nombre<input type="text" id="cNombre" placeholder="Ej: Osorno B1"></label>
+      <label>N° de casa en la ficha<input type="text" id="cNumero" placeholder="Ej: B1"></label>
+      <label>Tipo (catálogo de kg)<select id="cTipo">${tiposList().map(t=>`<option value="${esc(t)}">${esc(catName(t))}</option>`).join("")}</select></label>
+      <label>Fecha de inicio<input type="date" id="cInicio"></label>
+      <label>Término comprometido (opcional)<input type="date" id="cTermino"></label>
+    </div>
+    <div class="row"><span class="grow small muted">Sin término comprometido, el plan se calcula con el rendimiento piloto del tipo de casa.</span><button id="cCancel" hidden>Cancelar</button><button class="pri" id="cSave">Agregar casa</button></div>
+  </div>
+  <div class="panel" style="display:grid;gap:12px"><h2>Parámetros de cálculo</h2>
+    <div class="form">
+      <label>Horas efectivas por día<input type="number" step="0.5" min="1" id="pHoras" value="${cfg.horasDia}"></label>
+      <label>Revestimiento más lento que armado (factor)<input type="number" step="0.05" min="0" id="pFactor" value="${cfg.factorForrado}"></label>
+      <label>Días hábiles<select id="pSab"><option value="0"${cfg.sabado?"":" selected"}>Lunes a viernes</option><option value="1"${cfg.sabado?" selected":""}>Lunes a sábado</option></select></label>
+      <label style="grid-column:1/-1">Feriados (AAAA-MM-DD, separados por coma)<input type="text" id="pFer" value="${esc((cfg.feriados||[]).join(", "))}"></label>
+      <label style="grid-column:1/-1">Elementos sin revestimiento en taller (inicio del código, separados por coma)<input type="text" id="pSinF" value="${esc((cfg.sinForrado||[]).join(", "))}" placeholder="Ej: BW"><span class="small muted">Su revestimiento no se cuenta en kg totales, avance, plan ni proyección. Deja vacío para contarlo.</span></label>
+    </div>
+    <div class="row"><span class="grow small muted">Rendimiento piloto (estructura / revestimiento): ${tiposList().map(k=>`${esc(catName(k))} ${nf1.format((PILOTO[k]||{}).a||0)} / ${nf1.format((PILOTO[k]||{}).f||0)} kg/h`).join(" · ")}.${st.isAdmin?` Se cambia en <a href="#admin">Administración</a>.`:""}</span>${st.isAdmin?`<button class="pri" id="pSave">Guardar parámetros</button>`:`<span class="chip neutral">Solo administradores</span>`}</div>
+  </div>`;
+  let editing=null;
+  $("cSave").onclick=async()=>{ const nombre=$("cNombre").value.trim(); if(!nombre){ toast("Escribe el nombre de la casa"); return; }
+    const doc={nombre, numero:$("cNumero").value.trim().toUpperCase(), tipo:$("cTipo").value, inicio:$("cInicio").value||null, termino:$("cTermino").value||null};
+    try{ if(editing) await st.db.collection("casas").doc(editing).update(doc); else { doc.creado=Date.now(); const ref=await st.db.collection("casas").add(doc); st.casaId=ref.id; saveSel(); } toast(editing?"Casa actualizada":"Casa agregada"); }catch(e){ toast("No se pudo guardar: "+(e.message||e.code)); } };
+  el.querySelectorAll("[data-ced]").forEach(b=>b.onclick=()=>{ const c=st.casas.find(x=>x.id===b.dataset.ced); editing=c.id; $("casaFormT").textContent="Editar "+c.nombre; $("cNombre").value=c.nombre; $("cNumero").value=c.numero||""; $("cTipo").value=c.tipo; $("cInicio").value=c.inicio||""; $("cTermino").value=c.termino||""; $("cSave").textContent="Guardar cambios"; $("cCancel").hidden=false; $("cNombre").focus(); });
+  $("cCancel").onclick=renderObras;
+  el.querySelectorAll("[data-cdel]").forEach(b=>b.onclick=()=>{ const id=b.dataset.cdel; const n=st.fichas.filter(f=>fichaCasas(f).includes(id)).length; const w=el.querySelector(`[data-cdw="${CSS.escape(id)}"]`);
+    w.innerHTML = n? `<span class="small">Tiene ${n} ficha${n>1?"s":""}; elimínalas primero.</span>` : `<span class="small">¿Eliminar?</span> <button class="ghost danger" data-ok>Sí</button><button class="ghost" data-no>No</button>`;
+    if(!n){ w.querySelector("[data-no]").onclick=renderObras; w.querySelector("[data-ok]").onclick=async()=>{ try{ await st.db.collection("casas").doc(id).delete(); toast("Casa eliminada"); }catch(e){ toast("No se pudo eliminar: "+(e.message||e.code)); } }; } });
+  if($("pSave")) $("pSave").onclick=async()=>{ const fer=$("pFer").value.split(/[,\s]+/).map(s=>s.trim()).filter(s=>/^\d{4}-\d{2}-\d{2}$/.test(s));
+    const sinF=$("pSinF").value.split(/[,;]+/).map(s=>s.trim().toUpperCase()).filter(Boolean);
+    const doc={horasDia:Math.max(1,+$("pHoras").value||7), factorForrado:Math.max(0,+$("pFactor").value||0), sabado:$("pSab").value==="1", feriados:fer, sinForrado:sinF};
+    try{ await st.db.collection("config").doc("general").set(doc); toast("Parámetros guardados"); }catch(e){ toast("No se pudo guardar: "+(e.message||e.code)); } };
+}
+
+/* ---------- Vista: Administración (catálogo de elementos y kg) ---------- */
+function admLoad(tipo){
+  const rows=(RAWCAT[tipo]||[]).map(([t,c,q,a,f])=>({t,c,q,a,f}));
+  const p=PILOTO[tipo]||{a:60,f:60,ref:""};
+  st.adm={tipo, nombre:catName(tipo), rows, orig:new Map(rows.map(r=>[norm(r.c),{...r}])), pilA:p.a, pilF:p.f, ref:p.ref||"", dirty:false, filter:"", isNew:!CAT[tipo], removed:[], note:"", hist:null};
+}
+function admUsage(tipo){ /* códigos usados en fichas de casas de este tipo */
+  const casas=new Set(st.casas.filter(c=>c.tipo===tipo).map(c=>c.id)); const used=new Set();
+  for(const f of st.fichas) for(const it of f.items||[]){ if(!casas.has(itemCasa(f,it))) continue; const k=norm(it.c||it.raw); if(k) used.add(k); }
+  return used;
+}
+function admTotals(rows){ let a=0,f=0; for(const r of rows){ a+=(+r.q||0)*(+r.a||0); f+=(+r.q||0)*(+r.f||0); } return {a,f}; }
+function admErrors(A){
+  const errs=[]; const seen=new Map();
+  A.rows.forEach((r,i)=>{ const k=norm(r.c); if(!k) errs.push(`Fila ${i+1}: falta el código`); else if(seen.has(k)) errs.push(`Código repetido: ${r.c} (filas ${seen.get(k)+1} y ${i+1})`); else seen.set(k,i);
+    if(!(+r.q>=1)) errs.push(`${r.c||"Fila "+(i+1)}: la cantidad debe ser 1 o más`); if(!(+r.a>=0)||!(+r.f>=0)) errs.push(`${r.c||"Fila "+(i+1)}: kg inválidos`); });
+  if(!(+A.pilA>0)||!(+A.pilF>0)) errs.push("Los rendimientos piloto deben ser mayores que 0");
+  if(!A.rows.length) errs.push("El catálogo no tiene elementos");
+  return errs;
+}
+function renderAdmin(){
+  const el=$("v-admin");
+  if(st.dbState!=="ok"){ el.innerHTML=statePanel(); return; }
+  if(!st.isAdmin){ el.innerHTML=`<div class="panel empty"><h2>Requiere acceso de administrador</h2><p>Solo el dueño y los editores de esta página pueden modificar la base de datos de elementos.</p></div>`; return; }
+  if(!st.adm || (!st.adm.isNew && !CAT[st.adm.tipo])) admLoad(st.adm && CAT[st.adm.tipo] ? st.adm.tipo : (st.casas.find(c=>c.id===st.casaId)||{}).tipo || tiposList()[0]);
+  else if(!st.adm.dirty && !st.adm.isNew) admLoad(st.adm.tipo);
+  const A=st.adm, tot=admTotals(A.rows), meta=CATMETA[A.tipo], usedBy=st.casas.filter(c=>c.tipo===A.tipo);
+  el.innerHTML = `
+  <div class="panel" style="display:grid;gap:14px">
+    <div class="headline"><h1>Base de datos de elementos</h1><span class="chip neutral">Solo administradores</span><span class="meta">Los kg de cada elemento que usa el programa para calcular el avance.</span></div>
+    <div class="row">
+      <label class="row small" for="admTipo"><span class="lbl">Catálogo</span><select id="admTipo">${tiposList().map(t=>`<option value="${esc(t)}"${t===A.tipo?" selected":""}>${esc(catName(t))}</option>`).join("")}${A.isNew?`<option value="${esc(A.tipo)}" selected>${esc(A.nombre)} (nuevo)</option>`:""}</select></label>
+      <span class="grow small muted">${A.isNew?"Catálogo nuevo, aún no guardado":meta&&meta.actualizado?`Actualizado ${new Date(meta.actualizado).toLocaleString("es-CL",{dateStyle:"medium",timeStyle:"short"})}`:"Sin cambios desde la planilla piloto"}${usedBy.length?` · lo usa${usedBy.length>1?"n":""}: ${usedBy.map(c=>esc(c.nombre)).join(", ")}`:""}</span>
+      <input type="file" id="admXls" accept=".xlsx,.xls,.xlsm" hidden>
+      <button id="admImport">Importar Excel (hoja BD)</button>
+      <button id="admNew">Nuevo catálogo</button>
+    </div>
+    <div id="admNewBox" hidden class="row"><input type="text" id="admNewName" placeholder="Nombre, ej: Osorno N"><button class="pri" id="admNewOk">Crear</button><button class="ghost" id="admNewNo">Cancelar</button><span class="small muted">Empieza vacío o copiando el catálogo actual.</span><label class="row small"><input type="checkbox" class="ck" id="admNewCopy" checked> Copiar elementos de ${esc(A.nombre)}</label></div>
+    ${A.note?`<div class="notice ${A.noteCls||""}">${A.note}</div>`:""}
+    <div class="form">
+      <label>Rendimiento piloto estructura (kg/h)<input type="number" step="0.01" min="0" id="admPilA" value="${A.pilA}"></label>
+      <label>Rendimiento piloto revestimiento (kg/h)<input type="number" step="0.01" min="0" id="admPilF" value="${A.pilF}"></label>
+      <label style="grid-column:span 2">Referencia del rendimiento<input type="text" id="admRef" value="${esc(A.ref)}" placeholder="Ej: Osorno piloto, ago 2026"></label>
+    </div>
+    <div class="tiles" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+      <div class="tile"><span class="lbl">Elementos</span><span class="v num" id="admN">${A.rows.length}</span></div>
+      <div class="tile"><span class="lbl">Kg estructura</span><span class="v num" id="admKA">${kg(tot.a)}</span></div>
+      <div class="tile"><span class="lbl">Kg revestimiento</span><span class="v num" id="admKF">${kg(tot.f)}</span></div>
+      <div class="tile"><span class="lbl">Kg total casa</span><span class="v num" id="admKT">${kg(tot.a+tot.f)}</span></div>
+    </div>
+    ${sinForradoPre().length?`<div class="notice small">El revestimiento de los elementos que empiezan con <b>${esc((st.cfg.sinForrado||[]).join(", "))}</b> no se cuenta en el avance porque hoy no se hace en taller (${kg(admTotals(A.rows.filter(r=>noForrado(r.c))).f)} kg de revestimiento en este catálogo). Se cambia en <a href="#obras">Configuración</a>.</div>`:""}
+    <div class="row"><input type="text" id="admFilter" placeholder="Filtrar por código o tipo" value="${esc(A.filter)}"><span class="grow small muted">Kg por unidad. El total de la fila es cantidad × kg.</span><button class="ghost" id="admAdd">+ Agregar elemento</button></div>
+    <div class="tablewrap" id="admTable"></div>
+    <div class="row" style="position:sticky;bottom:env(safe-area-inset-bottom,0px);background:var(--panel);padding-block:10px;border-top:1px solid var(--line)">
+      <span class="grow small" id="admSum"></span>
+      ${!A.isNew && !usedBy.length && tiposList().length>1?`<span id="admDelW"><button class="ghost danger" id="admDel">Eliminar catálogo</button></span>`:""}
+      <button id="admDiscard">Descartar cambios</button>
+      <button class="pri" id="admSave">Guardar catálogo</button>
+    </div>
+  </div>
+  <details class="panel" id="admHistBox"><summary>Versiones anteriores</summary><div id="admHist" class="small" style="margin-top:10px">Cargando…</div></details>`;
+  ["admTable","admSum"].forEach(()=>{});
+  admDrawTable(); admDrawSum();
+  const footBtns=el.querySelectorAll("#admSave,#admDiscard"); footBtns.forEach(b=>b.addEventListener("mousedown",e=>e.preventDefault()));
+  $("admTipo").onchange=e=>{ if(A.dirty && !confirmLeave()) { e.target.value=A.tipo; return; } admLoad(e.target.value); renderAdmin(); };
+  $("admImport").onclick=()=>$("admXls").click();
+  $("admXls").onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(f) admImport(f); };
+  $("admNew").onclick=()=>{ $("admNewBox").hidden=false; $("admNewName").focus(); };
+  $("admNewNo").onclick=()=>{ $("admNewBox").hidden=true; };
+  $("admNewOk").onclick=()=>{ const nombre=$("admNewName").value.trim(); if(!nombre){ toast("Escribe un nombre"); return; }
+    const id=nombre.toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g,"_").replace(/[^A-Z0-9_\-.]/g,""); if(!id){ toast("Usa letras o números en el nombre"); return; }
+    if(CAT[id]){ toast("Ya existe un catálogo con ese nombre"); return; }
+    const copy=$("admNewCopy").checked, rows=copy? A.rows.map(r=>({...r})):[];
+    st.adm={tipo:id,nombre,rows,orig:new Map(),pilA:A.pilA,pilF:A.pilF,ref:A.ref,dirty:true,filter:"",isNew:true,removed:[],note:`Catálogo nuevo "${esc(nombre)}"${copy?`, copiado de ${esc(A.nombre)}`:""}. Ajusta los elementos o importa su Excel y luego guarda.`};
+    renderAdmin(); };
+  const bindNum=(id,k)=>$(id).addEventListener("input",e=>{ A[k]=e.target.type==="number"? +e.target.value : e.target.value; A.dirty=true; admDrawSum(); });
+  bindNum("admPilA","pilA"); bindNum("admPilF","pilF"); bindNum("admRef","ref");
+  $("admFilter").oninput=e=>{ A.filter=e.target.value; admDrawTable(); };
+  $("admAdd").onclick=()=>{ A.filter=""; $("admFilter").value=""; A.rows.push({t:A.rows.length?A.rows[A.rows.length-1].t:"",c:"",q:1,a:0,f:0}); A.dirty=true; admDrawTable(); admDrawSum(); const ins=$("admTable").querySelectorAll('input[data-k="c"]'); ins[ins.length-1]?.focus(); };
+  $("admDiscard").onclick=()=>{ if(A.isNew){ st.adm=null; } else admLoad(A.tipo); renderAdmin(); };
+  $("admSave").onclick=admSave;
+  if($("admDel")) $("admDel").onclick=()=>{ const w=$("admDelW"); w.innerHTML=`<span class="small">¿Eliminar ${esc(A.nombre)}? Queda en versiones anteriores.</span> <button class="ghost danger" id="admDelOk">Sí</button><button class="ghost" id="admDelNo">No</button>`;
+    $("admDelNo").onclick=renderAdmin; $("admDelOk").onclick=async()=>{ try{ await admBackup(A.tipo); await st.db.collection("catalogos").doc(A.tipo).delete(); st.adm=null; toast("Catálogo eliminado"); }catch(e){ toast("No se pudo eliminar: "+(e.message||e.code)); } }; };
+  $("admHistBox").addEventListener("toggle",()=>{ if($("admHistBox").open) admLoadHist(); });
+}
+function confirmLeave(){ toast("Tienes cambios sin guardar: guárdalos o descártalos primero"); return false; }
+function admDrawTable(){
+  const A=st.adm, used=admUsage(A.tipo), q=norm(A.filter), ql=A.filter.toLowerCase();
+  const idxs=A.rows.map((r,i)=>i).filter(i=>{ const r=A.rows[i]; return !ql || norm(r.c).includes(q) || (r.t||"").toLowerCase().includes(ql); });
+  const tipos=[...new Set(A.rows.map(r=>r.t).filter(Boolean))];
+  $("admTable").innerHTML = `<datalist id="dlTiposEl">${tipos.map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+  <table class="num"><tr><th>Tipo de elemento</th><th>Código</th><th class="r">Cant.</th><th class="r">Kg estructura</th><th class="r">Kg revestimiento</th><th class="r">Kg total</th><th>Cambio</th><th></th></tr>
+  ${idxs.map(i=>{ const r=A.rows[i], o=A.orig.get(norm(r.c)); const st_=!r.c?"":!o?`<span class="chip good">Nuevo</span>`:(o.t!==r.t||+o.q!==+r.q||Math.abs(o.a-r.a)>0.005||Math.abs(o.f-r.f)>0.005||o.c!==r.c)?`<span class="chip warn">Modificado</span>`:"";
+    return `<tr><td><input type="text" list="dlTiposEl" data-i="${i}" data-k="t" value="${esc(r.t)}" style="width:11em" aria-label="Tipo"></td>
+    <td><input type="text" class="mono" data-i="${i}" data-k="c" value="${esc(r.c)}" style="width:8em" aria-label="Código"></td>
+    <td class="r"><input type="number" min="1" step="1" data-i="${i}" data-k="q" value="${r.q}" style="width:4.2em" aria-label="Cantidad"></td>
+    <td class="r"><input type="number" min="0" step="0.01" data-i="${i}" data-k="a" value="${r.a}" style="width:6em" aria-label="Kg estructura"></td>
+    <td class="r"><input type="number" min="0" step="0.01" data-i="${i}" data-k="f" value="${r.f}" style="width:6em" aria-label="Kg revestimiento"></td>
+    <td class="r" data-tot="${i}">${nf1.format((+r.q||0)*((+r.a||0)+(+r.f||0)))}</td><td data-chg="${i}">${st_}${noForrado(r.c)&&+r.f>0?` <span class="chip neutral" title="Este revestimiento no se cuenta: no se hace en taller">Revestimiento no se cuenta</span>`:""}</td>
+    <td><button class="ghost danger" data-rm="${i}" aria-label="Quitar ${esc(r.c)}" title="${used.has(norm(r.c))?"Este elemento está en fichas registradas":""}">✕</button></td></tr>`; }).join("")}
+  </table>${!idxs.length?`<div class="empty small">${A.rows.length?"Ningún elemento coincide con el filtro.":"Sin elementos. Agrega filas o importa el Excel."}</div>`:""}`;
+  $("admTable").querySelectorAll("input[data-i]").forEach(inp=>inp.addEventListener("input",()=>{ const r=A.rows[+inp.dataset.i]; const k=inp.dataset.k; r[k]= inp.type==="number"? (inp.value===""?0:+inp.value) : inp.value; A.dirty=true;
+    const i=+inp.dataset.i; const td=$("admTable").querySelector(`[data-tot="${i}"]`); if(td) td.textContent=nf1.format((+r.q||0)*((+r.a||0)+(+r.f||0))); admDrawSum(); }));
+  $("admTable").querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{ const i=+b.dataset.rm; const r=A.rows[i]; if(A.orig.has(norm(r.c))) A.removed.push(r); A.rows.splice(i,1); A.dirty=true; admDrawTable(); admDrawSum(); });
+}
+function admDrawSum(){
+  const A=st.adm, tot=admTotals(A.rows), used=admUsage(A.tipo), errs=admErrors(A);
+  $("admN").textContent=A.rows.length; $("admKA").textContent=kg(tot.a); $("admKF").textContent=kg(tot.f); $("admKT").textContent=kg(tot.a+tot.f);
+  const cur=new Set(A.rows.map(r=>norm(r.c))); const gone=[...A.orig.keys()].filter(k=>!cur.has(k)); const goneUsed=gone.filter(k=>used.has(k));
+  $("admSum").innerHTML = errs.length? `<span class="chip crit">${errs.length} error${errs.length>1?"es":""}</span> ${esc(errs[0])}`
+    : !A.dirty? `<span class="chip good">Sin cambios</span>`
+    : `<span class="chip warn">Cambios sin guardar</span>${gone.length?` · ${gone.length} elemento${gone.length>1?"s":""} eliminado${gone.length>1?"s":""}`:""}${goneUsed.length?` <span class="chip crit">${goneUsed.length} usado${goneUsed.length>1?"s":""} en fichas</span> esas filas dejarán de sumar kg`:""}`;
+  $("admSave").disabled = !A.dirty || errs.length>0;
+}
+async function admBackup(tipo){
+  const snap = await st.db.collection("catalogos").doc(tipo).get(); if(!snap.exists) return;
+  await st.db.collection("catalogos_hist").add({...snap.data(), tipo, guardadoEn:Date.now()});
+}
+async function admSave(){
+  const A=st.adm; const errs=admErrors(A); if(errs.length){ toast(errs[0]); return; }
+  const b=$("admSave"); b.disabled=true; b.innerHTML=`<span class="spin"></span> Guardando`;
+  try{
+    await admBackup(A.tipo);
+    const doc={nombre:A.nombre, items:A.rows.map(r=>({t:String(r.t||"").trim(), c:String(r.c).trim(), q:Math.max(1,Math.round(+r.q||1)), a:+(+r.a||0).toFixed(2), f:+(+r.f||0).toFixed(2)})), pilA:+A.pilA, pilF:+A.pilF, ref:A.ref||"", actualizado:Date.now(), version:((CATMETA[A.tipo]||{}).version||0)+1};
+    /* Primera vez que se guarda en la base: los demás catálogos de las planillas piloto también se guardan, para no perderlos */
+    const db = st.db; const existing = await db.collection("catalogos").get();
+    if(existing.empty){ for(const t of tiposList()) if(t!==A.tipo) await db.collection("catalogos").doc(t).set({nombre:catName(t), items:RAWCAT[t].map(([tt,c,q,a,f])=>({t:tt,c,q,a,f})), pilA:PILOTO[t].a, pilF:PILOTO[t].f, ref:PILOTO[t].ref||"", actualizado:Date.now(), version:1}); }
+    await db.collection("catalogos").doc(A.tipo).set(doc);
+    A.dirty=false; A.isNew=false; toast("Catálogo guardado"); admLoad(A.tipo); st.adm.note=""; renderAdmin();
+  }catch(e){ b.disabled=false; b.textContent="Guardar catálogo"; toast(e && e.code==="permission_denied" ? "No tienes permiso de administrador para guardar" : "No se pudo guardar: "+(e.message||e.code)); }
+}
+async function admLoadHist(){
+  const A=st.adm, box=$("admHist");
+  try{
+    const s = await st.db.collection("catalogos_hist").where("tipo","==",A.tipo).get();
+    const vs = s.docs.map(d=>({id:d.id,...d.data()})).sort((x,y)=>(y.guardadoEn||0)-(x.guardadoEn||0)).slice(0,15);
+    box.innerHTML = vs.length? `<table class="num"><tr><th>Versión</th><th>Guardada hasta</th><th class="r">Elementos</th><th class="r">Kg total</th><th></th></tr>${vs.map(v=>{ const t=admTotals(v.items||[]); return `<tr><td>${v.version||"—"}</td><td>${new Date(v.guardadoEn).toLocaleString("es-CL",{dateStyle:"medium",timeStyle:"short"})}</td><td class="r">${(v.items||[]).length}</td><td class="r">${kg(t.a+t.f)}</td><td><button class="ghost" data-rest="${esc(v.id)}">Cargar en el editor</button></td></tr>`; }).join("")}</table><p class="muted" style="margin:8px 0 0">Al cargar una versión puedes revisarla y luego guardarla para restaurarla.</p>`
+      : `<span class="muted">Aún no hay versiones anteriores. Cada vez que guardes, la versión que se reemplaza queda aquí.</span>`;
+    box.querySelectorAll("[data-rest]").forEach(b=>b.onclick=()=>{ const v=vs.find(x=>x.id===b.dataset.rest); A.rows=(v.items||[]).map(r=>({...r})); A.pilA=v.pilA; A.pilF=v.pilF; A.ref=v.ref||""; A.dirty=true; A.note=`Versión ${v.version||""} cargada en el editor. Guarda para restaurarla.`; renderAdmin(); });
+  }catch(e){ box.textContent="No se pudieron leer las versiones: "+(e.message||e.code); }
+}
+/* Importar la hoja BD de una planilla de rendimientos */
+async function admImport(file){
+  const A=st.adm; if(!window.XLSX){ toast("No se cargó el lector de Excel"); return; }
+  try{
+    const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
+    const names=[...wb.SheetNames].sort((x,y)=>(/^bd$/i.test(y)?1:0)-(/^bd$/i.test(x)?1:0));
+    let rows=null, pil=null;
+    for(const name of names){
+      const g=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:null,raw:true});
+      let h=-1; for(let r=0;r<Math.min(g.length,30);r++){ const row=(g[r]||[]).map(v=>String(v??"").trim().toLowerCase()); if(row.includes("elemento") && row.some(v=>v.startsWith("cantidad"))){ h=r; break; } }
+      if(h<0) continue;
+      const hdr=(g[h]||[]).map(v=>String(v??"").trim().toLowerCase()), up=(g[h-1]||[]).map(v=>String(v??"").trim().toUpperCase());
+      const cT=hdr.findIndex(v=>v==="tipo"), cE=hdr.indexOf("elemento"), cQ=hdr.findIndex(v=>v.startsWith("cantidad"));
+      const kgCols=hdr.map((v,i)=>/^kgs?\b/.test(v)&&!/total/.test(v)?i:-1).filter(i=>i>cQ);
+      let cA=kgCols.find(i=>/METALCON|ACERO|ESTRUCT/.test(up[i])); if(cA==null) cA=kgCols[0];
+      const cF=kgCols.filter(i=>i!==cA);
+      if(cE<0||cQ<0||cA==null){ continue; }
+      const val=v=>{ const n=typeof v==="number"?v:parseFloat(String(v??"").replace(",",".")); return isFinite(n)?n:0; };
+      rows=[]; for(let r=h+1;r<g.length;r++){ const row=g[r]||[]; const code=String(row[cE]??"").trim(); const tipo=String(cT>=0?row[cT]??"":"").trim();
+        if(!code || /^total/i.test(tipo) || /^total/i.test(code)) continue; if(typeof row[cQ]!=="number" && isNaN(parseFloat(row[cQ]))) continue;
+        rows.push({t:tipo,c:code,q:Math.max(1,Math.round(val(row[cQ]))||1),a:+val(row[cA]).toFixed(2),f:+cF.reduce((s,i)=>s+val(row[i]),0).toFixed(2)}); }
+      /* Rendimiento: hoja Produccion, tabla Acción / Factor (kg/h) */
+      const ps=wb.SheetNames.find(n=>/produc/i.test(n)); if(ps){ const pg=XLSX.utils.sheet_to_json(wb.Sheets[ps],{header:1,defval:null,raw:true}); let hc=-1,hr=-1;
+        pg.some((row,r)=>(row||[]).some((v,c)=>{ if(/factor\s*\(kg\/h\)/i.test(String(v||""))){ hr=r; hc=c; return true; } return false; }));
+        if(hr>=0){ const get=lbl=>{ for(let r=hr+1;r<hr+5;r++){ const row=pg[r]||[]; if(row.some(v=>String(v||"").trim().toLowerCase()===lbl)) return +row[hc]||null; } return null; }; const a=get("armado"), f=get("forrado")||get("revestimiento"); if(a&&f) pil={a:+a.toFixed(2),f:+f.toFixed(2)}; } }
+      break;
+    }
+    if(!rows||!rows.length){ A.note=`No encontré la tabla de elementos en "${esc(file.name)}". Debe tener columnas Tipo, Elemento, Cantidad y Kgs como la hoja BD de las planillas de rendimiento.`; A.noteCls="err"; renderAdmin(); return; }
+    const dups=new Map(); const clean=[]; for(const r of rows){ const k=norm(r.c); if(dups.has(k)){ dups.get(k).n++; continue; } dups.set(k,{n:1}); clean.push(r); }
+    const old=new Map(A.rows.map(r=>[norm(r.c),r])); const now=new Set(clean.map(r=>norm(r.c)));
+    let nNew=0,nChg=0; for(const r of clean){ const o=old.get(norm(r.c)); if(!o) nNew++; else if(o.t!==r.t||+o.q!==r.q||Math.abs(o.a-r.a)>0.005||Math.abs(o.f-r.f)>0.005) nChg++; }
+    const gone=A.rows.filter(r=>!now.has(norm(r.c))); const used=admUsage(A.tipo); const goneUsed=gone.filter(r=>used.has(norm(r.c)));
+    const nDup=[...dups.values()].filter(x=>x.n>1).length;
+    A.rows=clean; A.dirty=true; if(pil){ A.pilA=pil.a; A.pilF=pil.f; }
+    A.note=`Importado "${esc(file.name)}": ${clean.length} elementos · <b>${nNew}</b> nuevos, <b>${nChg}</b> modificados, <b>${gone.length}</b> que ya no están${goneUsed.length?` (<b>${goneUsed.length}</b> usados en fichas: ${goneUsed.slice(0,8).map(r=>esc(r.c)).join(", ")}${goneUsed.length>8?"…":""})`:""}.${nDup?` Se ignoraron ${nDup} códigos repetidos.`:""}${pil?` Rendimiento piloto leído de la hoja Produccion.`:""} Revisa y pulsa Guardar catálogo; hasta entonces nada cambia.`;
+    A.noteCls=goneUsed.length?"warn":""; renderAdmin();
+  }catch(e){ A.note="No se pudo leer el Excel: "+esc(e.message||e); A.noteCls="err"; renderAdmin(); }
+}
+
+/* ---------- Vista: Producción diaria global (todas las casas) ---------- */
+function computeGlobal(){
+  const Rs = st.casas.map(c=>computeCasa(c)); const days=new Map();
+  for(const R of Rs) for(const d of R.daily){ const g=days.get(d.fecha)||{fecha:d.fecha,a:0,f:0,casas:[]}; g.a+=d.a; g.f+=d.f; if(d.a+d.f>0) g.casas.push({nombre:R.casa.nombre,a:d.a,f:d.f}); days.set(d.fecha,g); }
+  const hd=Number(st.cfg.horasDia)||7;
+  const daily=[...days.values()].sort((x,y)=>x.fecha<y.fecha?-1:1).map(d=>({...d,kgh:(d.a+d.f)/hd}));
+  return {Rs,daily,hd};
+}
+function chartGlobal(box, G, n){
+  const ds=G.daily.slice(-n); if(!ds.length){ box.innerHTML=`<div class="empty small">Aún no hay fichas registradas.</div>`; return; }
+  const W=900,H=280,L=48,Rm=12,T=14,B=30, iw=W-L-Rm, ih=H-T-B;
+  const avg = ds.reduce((s,d)=>s+d.a+d.f,0)/ds.length;
+  const max=Math.max(...ds.map(d=>d.a+d.f), avg)*1.12;
+  const p=Math.pow(10,Math.floor(Math.log10(max/4))); let nice=10*p; for(const m of [1,2,2.5,5,10]) if(m*p*4>=max){ nice=m*p; break; }
+  const top=nice*Math.ceil(max/nice), Y=v=>T+ih*(1-v/top), bw=Math.min(40, iw/ds.length*0.62), X=i=>L+iw*(i+.5)/ds.length;
+  let g=""; for(let v=0; v<=top+1e-6; v+=nice) g+=`<line x1="${L}" x2="${W-Rm}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${kg(v)}</text>`;
+  const step=Math.max(1,Math.ceil(ds.length/12));
+  ds.forEach((d,i)=>{ const x=X(i)-bw/2, ya=Y(d.a), yf=Y(d.a+d.f);
+    if(d.a>0) g+=`<rect x="${x}" y="${ya}" width="${bw}" height="${Y(0)-ya}" fill="var(--armado)"/>`;
+    if(d.f>0 && Y(0)-yf>6) g+=`<path d="M${x},${ya-(d.a>0?2:0)} V${yf+4} q0,-4 4,-4 h${bw-8} q4,0 4,4 V${ya-(d.a>0?2:0)} Z" fill="var(--forrado)"/>`;
+    else if(d.a>0) g+=`<path d="M${x},${ya+4} q0,-4 4,-4 h${bw-8} q4,0 4,4 Z" fill="var(--armado)"/>`;
+    if(i%step===0||i===ds.length-1){ const dd=D(d.fecha); g+=`<text x="${X(i)}" y="${H-10}" text-anchor="middle">${dd.getUTCDate()} ${MES[dd.getUTCMonth()]}</text>`; } });
+  g+=`<line x1="${L}" x2="${W-Rm}" y1="${Y(avg)}" y2="${Y(avg)}" stroke="var(--plan)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="${W-Rm}" y="${Y(avg)-5}" text-anchor="end">Promedio ${kg(avg)} kg/día</text>`;
+  box.innerHTML=svgEl(W,H,g)+`<div class="legend"><span><i class="sq" style="background:var(--armado)"></i>Estructura (armado)</span><span><i class="sq" style="background:var(--forrado)"></i>Revestimiento (OSB + EPS)</span><span><i style="background:repeating-linear-gradient(90deg,var(--plan) 0 5px,transparent 5px 8px)"></i>Promedio del período</span></div>`;
+  attachTip(box, ds.map((d,i)=>({x:X(i), html:`<b>${fmtD(d.fecha)}</b> · ${kg(d.a+d.f)} kg · ${nf1.format(d.kgh)} kg/h<br>Estructura ${kg(d.a)} · Revestimiento ${kg(d.f)}${d.casas.map(c=>`<br>${esc(c.nombre)}: ${kg(c.a+c.f)} kg`).join("")}`})));
+}
+function renderProduccion(){
+  const el=$("v-prod");
+  if(st.dbState!=="ok"){ el.innerHTML=statePanel(); return; }
+  if(!st.casas.length){ el.innerHTML=`<div class="panel empty"><h2>Crea la primera casa</h2><p class="adminOnly">Define la casa en fabricación y su fecha de inicio para empezar el seguimiento.</p><a class="adminOnly" href="#obras"><button class="pri">Ir a Configuración</button></a></div>`; return; }
+  const G=computeGlobal(), ds=G.daily, last=ds[ds.length-1], prev=ds[ds.length-2];
+  const n=st.rango||20, per=ds.slice(-n);
+  const sumA=per.reduce((s,d)=>s+d.a,0), sumF=per.reduce((s,d)=>s+d.f,0), avg=per.length?(sumA+sumF)/per.length:0;
+  const tot=G.Rs.reduce((s,R)=>s+R.done,0);
+  const mes=todayS().slice(0,7), mesKg=ds.filter(d=>d.fecha.startsWith(mes)).reduce((s,d)=>s+d.a+d.f,0), mesDias=ds.filter(d=>d.fecha.startsWith(mes)).length;
+  const delta = last&&prev? (last.a+last.f)-(prev.a+prev.f) : null;
+  el.innerHTML=`
+  <div class="headline"><h1>Producción diaria del taller</h1><span class="meta">Todas las casas · ${ds.length} día${ds.length===1?"":"s"} con ficha${last?` · última ficha ${fmtDY(last.fecha)}`:""}</span></div>
+  <div class="tiles">
+    <div class="tile"><span class="lbl">Último día${last?` · ${fmtD(last.fecha)}`:""}</span><span class="v num">${last?kg(last.a+last.f):"—"} <small>kg</small></span><span class="s num">${last?`Estructura ${kg(last.a)} · Revestimiento ${kg(last.f)}`:"Sin fichas"}${delta!=null?`<br>${delta>=0?"+":"−"}${kg(Math.abs(delta))} kg respecto del día anterior`:""}</span></div>
+    <div class="tile"><span class="lbl">Promedio diario</span><span class="v num">${kg(avg)} <small>kg/día</small></span><span class="s num">${nf1.format(avg/G.hd)} kg/h con ${G.hd} h efectivas · últimos ${per.length} días con ficha</span></div>
+    <div class="tile"><span class="lbl">Este mes</span><span class="v num">${kg(mesKg)} <small>kg</small></span><span class="s num">${mesDias} día${mesDias===1?"":"s"} con ficha</span></div>
+    <div class="tile"><span class="lbl">Acumulado total</span><span class="v num">${kg(tot)} <small>kg</small></span><span class="s">${G.Rs.length} casa${G.Rs.length===1?"":"s"} · <a href="#casas">ver avance por casa</a></span></div>
+  </div>
+  <div class="panel"><div class="row"><h2 class="grow">Kg fabricados por día</h2><label class="row small" for="rango"><span class="lbl">Mostrar</span><select id="rango">${[10,20,40,80].map(v=>`<option value="${v}"${v===n?" selected":""}>Últimos ${v} días</option>`).join("")}</select></label></div><div class="chart" id="chGlobal"></div></div>
+  <div class="panel" style="display:grid;gap:10px"><h2>Detalle diario</h2>
+    ${per.length?`<div class="tablewrap"><table class="num"><tr><th>Fecha</th><th class="r">Estructura kg</th><th class="r">Revestimiento kg</th><th class="r">Total kg</th><th class="r">kg/h</th><th>Casas</th></tr>
+    ${[...per].reverse().map(d=>`<tr><td>${fmtD(d.fecha)}</td><td class="r">${kg(d.a)}</td><td class="r">${kg(d.f)}</td><td class="r"><b>${kg(d.a+d.f)}</b></td><td class="r">${nf1.format(d.kgh)}</td><td class="small">${d.casas.map(c=>`${esc(c.nombre)} <span class="muted">${kg(c.a+c.f)}</span>`).join(" · ")}</td></tr>`).join("")}
+    <tr><td><b>Período</b></td><td class="r"><b>${kg(sumA)}</b></td><td class="r"><b>${kg(sumF)}</b></td><td class="r"><b>${kg(sumA+sumF)}</b></td><td class="r"><b>${nf1.format(avg/G.hd)}</b></td><td></td></tr></table></div>`:`<div class="empty small">Aún no hay fichas registradas para esta casa.</div>`}
+  </div>`;
+  chartGlobal($("chGlobal"),G,n);
+  $("rango").onchange=e=>{ st.rango=+e.target.value; renderProduccion(); };
+}
+
+/* ---------- Vista: Casas (avance y tabiques) ---------- */
+function elemEstado(R,row){
+  const [tipo,code,q,a,f]=row, p=R.prod.get(code)||{a:0,o:0}, conForro=f>0;
+  if(p.a>=q && (!conForro || p.o>=q)) return {k:"ok", chip:`<span class="chip good">Fabricado</span>`, p};
+  if(p.a>=q) return {k:"forro", chip:`<span class="chip warn">Falta revestimiento</span>`, p};
+  if(p.a>0) return {k:"pend", chip:`<span class="chip neutral">Estructura ${p.a}/${q}</span>`, p};
+  return {k:"pend", chip:`<span class="chip neutral">Pendiente</span>`, p};
+}
+function renderCasas(){
+  const el=$("v-casas");
+  if(st.dbState!=="ok"){ el.innerHTML=statePanel(); return; }
+  if(!st.casas.length){ el.innerHTML=`<div class="panel empty"><h2>No hay casas</h2><a class="adminOnly" href="#obras"><button class="pri">Agregar una casa</button></a></div>`; return; }
+  const Rs=st.casas.map(c=>computeCasa(c)); st.openCasas ||= new Set();
+  el.innerHTML=`<div class="headline"><h1>Avance por casa</h1><span class="meta">${Rs.length} casa${Rs.length===1?"":"s"} · abre cada casa para ver el listado de tabiques</span></div>
+  ${Rs.map(R=>{ const cat=CAT[R.casa.tipo]||[]; const cnt={ok:0,forro:0,pend:0}; for(const r of cat) cnt[elemEstado(R,r).k]+=r[2];
+    const status = R.avance>=1 ? `<span class="chip good">Terminada</span>` : R.retraso>0.05 ? `<span class="chip crit">Atrasada ${pct(R.retraso)}</span>` : R.retraso>0.005 ? `<span class="chip warn">Leve atraso ${pct(R.retraso)}</span>` : `<span class="chip good">Al día</span>`;
+    return `<details class="panel casa" data-casa="${esc(R.casa.id)}"${st.openCasas.has(R.casa.id)?" open":""}>
+      <summary style="list-style:none;display:grid;gap:10px">
+        <div class="row"><h2 class="grow">${esc(R.casa.nombre)} <span class="pill-tipo">${esc(catName(R.casa.tipo))}</span></h2>${status}<button class="ghost" data-det="${esc(R.casa.id)}">Ver detalle →</button></div>
+        <div class="row" style="gap:12px;flex-wrap:nowrap"><span class="num" style="font-family:var(--f-display);font-size:28px;font-weight:700;min-width:3.6em">${pct(R.avance)}</span>
+          <div class="grow" style="display:grid;gap:4px;min-width:0"><div class="bar" style="height:12px"><i style="width:${R.total?R.doneA/R.total*100:0}%;background:var(--armado)"></i><i style="width:${R.total?R.doneF/R.total*100:0}%;background:var(--forrado)"></i></div>
+          <span class="small muted num">${kg(R.done)} de ${kg(R.total)} kg · estructura ${pct(R.totA?R.doneA/R.totA:0)} · revestimiento ${pct(R.totF?R.doneF/R.totF:0)} · término proyectado ${R.avance>=1?"—":fmtDY(R.fechaProy)}</span></div></div>
+        <div class="row small"><span class="chip good">${cnt.ok} fabricado${cnt.ok===1?"":"s"}</span><span class="chip warn">${cnt.forro} con revestimiento pendiente</span><span class="chip neutral">${cnt.pend} pendiente${cnt.pend===1?"":"s"}</span><span class="grow"></span><span class="muted">▾ Tabiques (${cat.length})</span></div>
+      </summary>
+      <div class="tabiques" style="margin-top:12px"></div>
+    </details>`; }).join("")}`;
+  const draw=(det,R)=>{
+    const box=det.querySelector(".tabiques"); const f=st.tabFiltro||{q:"",e:""};
+    const cat=CAT[R.casa.tipo]||[]; const q=norm(f.q), ql=f.q.toLowerCase();
+    const rows=cat.filter(r=>{ const s=elemEstado(R,r).k; if(f.e && f.e!==s) return false; return !ql || norm(r[1]).includes(q) || r[0].toLowerCase().includes(ql); });
+    box.innerHTML=`<div class="row"><input type="text" data-f="q" placeholder="Filtrar por código o tipo" value="${esc(f.q)}"><select data-f="e"><option value="">Todos</option><option value="ok"${f.e==="ok"?" selected":""}>Fabricados</option><option value="forro"${f.e==="forro"?" selected":""}>Falta revestimiento</option><option value="pend"${f.e==="pend"?" selected":""}>Pendientes</option></select><span class="small muted">${rows.length} de ${cat.length}</span></div>
+    <div class="tablewrap" style="margin-top:8px"><table class="num"><tr><th>Código</th><th>Tipo</th><th class="r">Cant.</th><th class="r">Kg estructura</th><th class="r">Kg revestimiento</th><th>Estado</th><th>Estructura</th><th>Revestimiento</th></tr>
+    ${rows.map(r=>{ const E=elemEstado(R,r); const [tipo,code,qq,a,fk]=r; const raw=(RAWCAT[R.casa.tipo]||[]).find(x=>x[1]===code);
+      return `<tr><td class="mono">${esc(code)}</td><td>${esc(tipo)}</td><td class="r">${qq}</td><td class="r">${nf1.format(a*qq)}</td><td class="r">${fk>0?nf1.format(fk*qq):raw&&raw[4]>0?`<span class="muted" title="No se hace en taller">no aplica</span>`:"—"}</td><td>${E.chip}</td><td class="small">${E.p.fa?fmtD(E.p.fa):""}</td><td class="small">${E.p.fo?fmtD(E.p.fo):""}</td></tr>`; }).join("")}
+    </table></div>`;
+    box.querySelectorAll("[data-f]").forEach(inp=>inp.addEventListener(inp.tagName==="SELECT"?"change":"input",()=>{ st.tabFiltro={...f,[inp.dataset.f]:inp.value}; const pos=inp.selectionStart; draw(det,R); const ni=box.querySelector(`[data-f="${inp.dataset.f}"]`); ni.focus(); if(ni.setSelectionRange&&pos!=null) ni.setSelectionRange(pos,pos); }));
+  };
+  el.querySelectorAll("details.casa").forEach(det=>{ const R=Rs.find(x=>x.casa.id===det.dataset.casa);
+    if(det.open) draw(det,R);
+    det.addEventListener("toggle",()=>{ if(det.open){ st.openCasas.add(R.casa.id); draw(det,R); } else st.openCasas.delete(R.casa.id); }); });
+  el.querySelectorAll("[data-det]").forEach(b=>b.onclick=e=>{ e.preventDefault(); e.stopPropagation(); st.casaId=b.dataset.det; st.corte=null; saveSel(); location.hash="#detalle"; });
+}
+
+/* ---------- Navegación ---------- */
+const VIEWS=["produccion","casas","detalle","cargar","fichas","obras","admin"];
+const SECTION={produccion:"v-prod",casas:"v-casas",detalle:"v-resumen",cargar:"v-cargar",fichas:"v-fichas",obras:"v-obras",admin:"v-admin"};
+const READER_VIEWS=["produccion","casas","detalle"];
+function view(){ let h=location.hash.slice(1); if(h==="resumen") h="detalle"; if(!VIEWS.includes(h)) return "produccion"; return (st.isAdmin||READER_VIEWS.includes(h))? h : "produccion"; }
+function render(){
+  const v=view();
+  document.querySelectorAll("[data-view]").forEach(s=>s.hidden = s.id!==SECTION[v]);
+  document.querySelectorAll("#tabs a").forEach(a=>{ if(a.dataset.v===v) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current"); });
+  if(v==="produccion") renderProduccion(); else if(v==="casas") renderCasas(); else if(v==="detalle") renderResumen(); else if(v==="cargar") renderCargar(); else if(v==="fichas") renderFichas(); else if(v==="admin") renderAdmin(); else renderObras();
+}
+function saveSel(){ try{ localStorage.setItem("dmia.casa", st.casaId||""); }catch(e){} }
+let toastT; function toast(t){ let el=document.querySelector(".toast"); if(!el){ el=document.createElement("div"); el.className="toast"; el.setAttribute("role","status"); document.body.appendChild(el); } el.textContent=t; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>el.hidden=true,2600); }
+window.addEventListener("hashchange",render);
+
+$("cgCasa").onchange=()=>{ st.cgSel=$("cgCasa").value; if(st.draft) st.draft.casaId=st.cgSel; renderCargar(); };
+$("bFoto").onclick=()=>$("fFoto").click(); $("fFoto").onchange=e=>{ const fs=[...e.target.files]; e.target.value=""; if(fs.length) readPhotos(fs); };
+$("bXls").onclick=()=>$("fXls").click(); $("fXls").onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(f) readXls(f); };
+$("bManual").onclick=()=>{ const d=ensureDraft(); for(let i=0;i<5;i++) d.items.push({raw:"",e:true,o:false,v:false,q:1}); renderReview(); };
+for(const [zone,fn,acc] of [["dropFoto",readPhotos,/^image\//],["dropXls",f=>readXls(f[0]),/sheet|excel|officedocument/]]){
+  const z=$(zone); z.addEventListener("dragover",e=>{e.preventDefault(); z.classList.add("over");}); z.addEventListener("dragleave",()=>z.classList.remove("over"));
+  z.addEventListener("drop",e=>{ e.preventDefault(); z.classList.remove("over"); const fs=[...e.dataTransfer.files]; if(fs.length) fn(fs); });
+}
+render();
+
+/* ---------- Datos publicados (data.json) ---------- */
+(async()=>{
+  try{
+    const r = await fetch("data.json", {cache:"no-store"}); if(!r.ok) throw new Error("HTTP "+r.status);
+    const j = await r.json();
+    const cats = j.catalogos||{};
+    if(Object.keys(cats).length){ const cat={}, pil={}, meta={};
+      for(const [id,x] of Object.entries(cats)){ cat[id]=(x.items||[]).map(r=>[r.t||"",r.c,Math.max(1,+r.q||1),+r.a||0,+r.f||0]); pil[id]={a:+x.pilA||60,f:+x.pilF||60,ref:x.ref||""}; meta[id]={nombre:x.nombre||id}; }
+      RAWCAT=cat; PILOTO=pil; CATMETA=meta; }
+    st.cfg={...DEF_CFG,...(j.config||{})}; applyCfg();
+    st.casas=(j.casas||[]).sort((a,b)=>(a.creado||0)-(b.creado||0)); st.fichas=j.fichas||[];
+    st.loaded={casas:true,fichas:true}; st.dbState="ok";
+    if(!st.casas.find(c=>c.id===st.casaId)) st.casaId=st.casas[0]?.id||null;
+    if(j.generado){ const d=new Date(j.generado); $("pubStamp").textContent="Datos al "+d.toLocaleString("es-CL",{dateStyle:"medium",timeStyle:"short"}); }
+    render();
+  }catch(e){ st.dbState="error"; st.dbErr="No se pudieron cargar los datos ("+(e.message||e)+")"; render(); }
+})();
+</script>
+</body></html>
