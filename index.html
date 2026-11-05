@@ -197,7 +197,7 @@ let PILOTO = {OSORNO:{a:72.34,f:66.59,ref:"Osorno piloto, ago 2026"}, TENGLO:{a:
 const tiposList = () => Object.keys(CAT);
 let CATMETA = {}; /* tipo -> {nombre, actualizado} */
 const catName = t => (CATMETA[t] && CATMETA[t].nombre) || t;
-const DEF_CFG = {horasDia:7, factorForrado:0.3, sabado:false, feriados:[], sinForrado:[]};
+const DEF_CFG = {horasDia:7, factorForrado:0.3, sabado:false, feriados:[], sinForrado:[], sinKgTipos:[]};
 
 const norm = s => String(s||"").toUpperCase().replace(/[\s\-_–—:]+/g,"").replace(/,/g,".").replace(/^\.+|\.+$/g,"").replace(/[^A-Z0-9.]/g,"");
 let IDX = {};
@@ -207,7 +207,10 @@ rebuildIdx();
 let RAWCAT = CAT;
 const sinForradoPre = () => (st.cfg.sinForrado||[]).map(norm).filter(Boolean);
 const noForrado = code => { const k=norm(code); return sinForradoPre().some(p=>k.startsWith(p)); };
-function applyCfg(){ const out={}; for(const t of Object.keys(RAWCAT)) out[t]=RAWCAT[t].map(r=> noForrado(r[1]) ? [r[0],r[1],r[2],r[3],0] : r); CAT=out; rebuildIdx(); }
+/* Tipos de elemento que quedan en el catálogo pero no suman kg (ej. Perfil) */
+const sinKgSet = () => new Set((st.cfg.sinKgTipos||[]).map(t=>String(t).trim().toLowerCase()).filter(Boolean));
+const noSumaKg = tipo => sinKgSet().has(String(tipo||"").trim().toLowerCase());
+function applyCfg(){ const out={}; for(const t of Object.keys(RAWCAT)) out[t]=RAWCAT[t].map(r=> noSumaKg(r[0]) ? [r[0],r[1],r[2],0,0] : noForrado(r[1]) ? [r[0],r[1],r[2],r[3],0] : r); CAT=out; rebuildIdx(); }
 const lookup = (tipo,code) => (code && IDX[tipo] && IDX[tipo].get(norm(code))) || null;
 /* Una fila de ficha guarda el código reconocido (c) y lo escrito (raw); si el catálogo cambia, se vuelve a reconocer por lo escrito */
 const match = (tipo,it) => lookup(tipo,it.c) || lookup(tipo,it.raw);
@@ -298,7 +301,7 @@ function computeCasa(casa){
   const diffDias = fechaProy>termino ? workdaysBetween(addDays(termino,1),fechaProy,cfg) : -workdaysBetween(addDays(fechaProy,1),termino,cfg);
   const kgDia = nDias? (sA+sF)/nDias : 0;
   const kghReal = nDias? (sA+sF)/(nDias*hd) : 0;
-  return {casa,cfg,totA,totF,total,doneA,doneF,done,avance,byTipo:Object.values(byTipo),daily,fichas,issues,prod:elemDone,
+  return {casa,cfg,totA,totF,total,doneA,doneF,done,avance,byTipo:Object.values(byTipo).filter(b=>!noSumaKg(b.tipo)),daily,fichas,issues,prod:elemDone,
     rateA,rateF,rateSrcA,rateSrcF,pil,inicio:ini,termino,planDias,planSrc,corte,planHoy,planAt,retraso,adelanto,pendA,pendF,horasPend,diasPend,fechaProy,diffDias,kgDia,kghReal,nDias};
 }
 
@@ -503,6 +506,7 @@ function renderReview(){
       if(dup){ status=`<span class="chip warn">Repetido en la ficha</span>`; cls="flag"; nWarn++; }
       else if(it.e && prev.a>=m.q){ status=`<span class="chip warn">Estructura ya registrada</span>`; cls="flag"; nWarn++; }
       else if(it.o && m.f<=0){ status=`<span class="chip warn">${noForrado(m.code)?"Revestimiento no se hace en taller":"Sin revestimiento en catálogo"}</span>`; cls="flag"; nWarn++; }
+      else if(noSumaKg(m.tipo)) status=`<span class="chip neutral" title="Este tipo de elemento no suma kg">${esc(m.tipo)} · no suma kg</span>`;
       else status=`<span class="chip good">${esc(m.tipo)}</span>`;
       if(it.e) tA+=m.a*q; if(it.o) tF+=m.f*q; porCasa.set(rc.id,(porCasa.get(rc.id)||0)+(it.e?m.a*q:0)+(it.o?m.f*q:0));
     }
@@ -752,6 +756,7 @@ function renderObras(){
       <label>Días hábiles<select id="pSab"><option value="0"${cfg.sabado?"":" selected"}>Lunes a viernes</option><option value="1"${cfg.sabado?" selected":""}>Lunes a sábado</option></select></label>
       <label style="grid-column:1/-1">Feriados (AAAA-MM-DD, separados por coma)<input type="text" id="pFer" value="${esc((cfg.feriados||[]).join(", "))}"></label>
       <label style="grid-column:1/-1">Elementos sin revestimiento en taller (inicio del código, separados por coma)<input type="text" id="pSinF" value="${esc((cfg.sinForrado||[]).join(", "))}" placeholder="Ej: BW"><span class="small muted">Su revestimiento no se cuenta en kg totales, avance, plan ni proyección. Deja vacío para contarlo.</span></label>
+      <label style="grid-column:1/-1">Tipos de elemento que no suman kg (tipo del catálogo, separados por coma)<input type="text" id="pSinKg" value="${esc((cfg.sinKgTipos||[]).join(", "))}" placeholder="Ej: Perfil"><span class="small muted">Quedan en la base de datos, pero no cuentan en kg totales, producción, avance, plan ni proyección.</span></label>
     </div>
     <div class="row"><span class="grow small muted">Rendimiento piloto (estructura / revestimiento): ${tiposList().map(k=>`${esc(catName(k))} ${nf1.format((PILOTO[k]||{}).a||0)} / ${nf1.format((PILOTO[k]||{}).f||0)} kg/h`).join(" · ")}.${st.isAdmin?` Se cambia en <a href="#admin">Administración</a>.`:""}</span>${st.isAdmin?`<button class="pri" id="pSave">Guardar parámetros</button>`:`<span class="chip neutral">Solo administradores</span>`}</div>
   </div>`;
@@ -766,7 +771,8 @@ function renderObras(){
     if(!n){ w.querySelector("[data-no]").onclick=renderObras; w.querySelector("[data-ok]").onclick=async()=>{ try{ await st.db.collection("casas").doc(id).delete(); toast("Casa eliminada"); }catch(e){ toast("No se pudo eliminar: "+(e.message||e.code)); } }; } });
   if($("pSave")) $("pSave").onclick=async()=>{ const fer=$("pFer").value.split(/[,\s]+/).map(s=>s.trim()).filter(s=>/^\d{4}-\d{2}-\d{2}$/.test(s));
     const sinF=$("pSinF").value.split(/[,;]+/).map(s=>s.trim().toUpperCase()).filter(Boolean);
-    const doc={horasDia:Math.max(1,+$("pHoras").value||7), factorForrado:Math.max(0,+$("pFactor").value||0), sabado:$("pSab").value==="1", feriados:fer, sinForrado:sinF};
+    const sinKg=$("pSinKg").value.split(/[,;]+/).map(s=>s.trim()).filter(Boolean);
+    const doc={horasDia:Math.max(1,+$("pHoras").value||7), factorForrado:Math.max(0,+$("pFactor").value||0), sabado:$("pSab").value==="1", feriados:fer, sinForrado:sinF, sinKgTipos:sinKg};
     try{ await st.db.collection("config").doc("general").set(doc); toast("Parámetros guardados"); }catch(e){ toast("No se pudo guardar: "+(e.message||e.code)); } };
 }
 
@@ -1018,7 +1024,7 @@ function renderCasas(){
   if(!st.casas.length){ el.innerHTML=`<div class="panel empty"><h2>No hay casas</h2><a class="adminOnly" href="#obras"><button class="pri">Agregar una casa</button></a></div>`; return; }
   const Rs=st.casas.map(c=>computeCasa(c)); st.openCasas ||= new Set();
   el.innerHTML=`<div class="headline"><h1>Avance por casa</h1><span class="meta">${Rs.length} casa${Rs.length===1?"":"s"} · abre cada casa para ver el listado de tabiques</span></div>
-  ${Rs.map(R=>{ const cat=CAT[R.casa.tipo]||[]; const cnt={ok:0,forro:0,pend:0}; for(const r of cat) cnt[elemEstado(R,r).k]+=r[2];
+  ${Rs.map(R=>{ const cat=(CAT[R.casa.tipo]||[]).filter(r=>!noSumaKg(r[0])); const cnt={ok:0,forro:0,pend:0}; for(const r of cat) cnt[elemEstado(R,r).k]+=r[2];
     const status = R.avance>=1 ? `<span class="chip good">Terminada</span>` : R.retraso>0.05 ? `<span class="chip crit">Atrasada ${pct(R.retraso)}</span>` : R.retraso>0.005 ? `<span class="chip warn">Leve atraso ${pct(R.retraso)}</span>` : `<span class="chip good">Al día</span>`;
     return `<details class="panel casa" data-casa="${esc(R.casa.id)}"${st.openCasas.has(R.casa.id)?" open":""}>
       <summary style="list-style:none;display:grid;gap:10px">
@@ -1032,7 +1038,7 @@ function renderCasas(){
     </details>`; }).join("")}`;
   const draw=(det,R)=>{
     const box=det.querySelector(".tabiques"); const f=st.tabFiltro||{q:"",e:""};
-    const cat=CAT[R.casa.tipo]||[]; const q=norm(f.q), ql=f.q.toLowerCase();
+    const cat=(CAT[R.casa.tipo]||[]).filter(r=>!noSumaKg(r[0])); const q=norm(f.q), ql=f.q.toLowerCase();
     const rows=cat.filter(r=>{ const s=elemEstado(R,r).k; if(f.e && f.e!==s) return false; return !ql || norm(r[1]).includes(q) || r[0].toLowerCase().includes(ql); });
     box.innerHTML=`<div class="row"><input type="text" data-f="q" placeholder="Filtrar por código o tipo" value="${esc(f.q)}"><select data-f="e"><option value="">Todos</option><option value="ok"${f.e==="ok"?" selected":""}>Fabricados</option><option value="forro"${f.e==="forro"?" selected":""}>Falta revestimiento</option><option value="pend"${f.e==="pend"?" selected":""}>Pendientes</option></select><span class="small muted">${rows.length} de ${cat.length}</span></div>
     <div class="tablewrap" style="margin-top:8px"><table class="num"><tr><th>Código</th><th>Tipo</th><th class="r">Cant.</th><th class="r">Kg estructura</th><th class="r">Kg revestimiento</th><th>Estado</th><th>Estructura</th><th>Revestimiento</th></tr>
