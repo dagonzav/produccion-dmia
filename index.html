@@ -284,7 +284,9 @@ function computeCasa(casa){
   let planDias, termino, planSrc;
   if(casa.termino){ termino=casa.termino; planDias=Math.max(1,workdaysBetween(ini,termino,cfg)); planSrc="Fecha comprometida"; }
   else { planDias=Math.max(1,Math.ceil((totA/pil.a + totF/pil.f)/hd)); termino = planDias>1? addWorkdays(ini,planDias-1,cfg):ini; planSrc="Rendimiento piloto"; }
-  const corte = st.corte || (daily.length? daily[daily.length-1].fecha : todayS());
+  /* Corte: último día con ficha en el taller (de cualquier casa), así una casa sin fichas recientes también acumula atraso */
+  const ultimaFicha = st.fichas.reduce((m,f)=> f.fecha && f.fecha>m ? f.fecha : m, "");
+  const corte = st.corte || ultimaFicha || todayS();
   const planAt = s => Math.min(1, workdaysBetween(ini,s,cfg)/planDias);
   const planHoy = planAt(corte);
   const retraso = Math.max(0, planHoy-avance), adelanto = Math.max(0, avance-planHoy);
@@ -382,7 +384,7 @@ function renderResumen(){
   const diffTxt = R.diffDias>0 ? `${R.diffDias} día${R.diffDias>1?"s":""} hábil${R.diffDias>1?"es":""} después del plan` : R.diffDias<0 ? `${-R.diffDias} día${R.diffDias<-1?"s":""} hábil${R.diffDias<-1?"es":""} antes del plan` : "Coincide con el plan";
   const diffCls = R.diffDias>0? "crit" : "good";
   el.innerHTML = `
-  <div class="headline"><h1>${esc(casa.nombre)}</h1><select id="casaSel" aria-label="Casa" style="align-self:center">${casaOptions(st.casaId)}</select><span class="meta">Tipo ${esc(catName(casa.tipo))} · inicio ${fmtDY(R.inicio)} · corte <input type="date" id="corte" value="${R.corte}" aria-label="Fecha de corte"> ${st.corte?`<button class="ghost small" id="corteReset">Usar última ficha</button>`:""}</span>${status}</div>
+  <div class="headline"><h1>${esc(casa.nombre)}</h1><select id="casaSel" aria-label="Casa" style="align-self:center">${casaOptions(st.casaId)}</select><span class="meta">Tipo ${esc(catName(casa.tipo))} · inicio ${fmtDY(R.inicio)} · plazo de término ${st.isAdmin?`<input type="date" id="plazo" value="${esc(casa.termino||"")}" aria-label="Plazo de término de la casa">`:`<b>${casa.termino?fmtDY(casa.termino):"según rendimiento piloto"}</b>`} · datos al ${fmtDY(R.corte)}</span>${status}</div>
   <div class="tiles">
     <div class="tile"><span class="lbl">Kg fabricados</span><span class="v num">${kg(R.done)} <small>/ ${kg(R.total)} kg</small></span>
       <div class="bar" title="Estructura y revestimiento"><i style="width:${R.doneA/R.total*100}%;background:var(--armado)"></i><i style="width:${R.doneF/R.total*100}%;background:var(--forrado)"></i></div>
@@ -428,8 +430,12 @@ function renderResumen(){
   </details>`;
   chartCurva($("chCurva"),R); chartDiario($("chDia"),R);
   $("casaSel").onchange = e => { st.casaId=e.target.value; st.corte=null; saveSel(); render(); };
-  $("corte").onchange = e => { st.corte = e.target.value || null; renderResumen(); };
-  if($("corteReset")) $("corteReset").onclick = () => { st.corte=null; renderResumen(); };
+  if($("plazo")) $("plazo").onchange = async e => {
+    const v = e.target.value || null;
+    if(v && casa.inicio && v < casa.inicio){ toast("El plazo no puede ser anterior al inicio"); e.target.value = casa.termino||""; return; }
+    try{ await st.db.collection("casas").doc(casa.id).update({termino:v}); casa.termino=v; toast(v?`Plazo de ${casa.nombre}: ${fmtDY(v)}`:"Plazo quitado: se usa el rendimiento piloto"); renderResumen(); }
+    catch(err){ toast("No se pudo guardar: "+(err.message||err.code)); e.target.value = casa.termino||""; }
+  };
   const drawEl = () => {
     const q = norm($("elFilter").value), est=$("elEstado").value, ql=$("elFilter").value.toLowerCase();
     const rows = (CAT[casa.tipo]||[]).filter(([tipo,code,qq,a,f])=>{
