@@ -1055,17 +1055,26 @@ function renderProduccion(){
   const G=computeGlobal(), ds=G.daily, last=ds[ds.length-1], prev=ds[ds.length-2];
   const n=[5,10,20,30].includes(st.rango)?st.rango:10, per=ds.slice(-n);
   const sumA=per.reduce((s,d)=>s+d.a,0), sumF=per.reduce((s,d)=>s+d.f,0), avg=per.length?(sumA+sumF)/per.length:0;
-  const tot=G.Rs.reduce((s,R)=>s+R.done,0);
-  const mes=todayS().slice(0,7), mesKg=ds.filter(d=>d.fecha.startsWith(mes)).reduce((s,d)=>s+d.a+d.f,0), mesDias=ds.filter(d=>d.fecha.startsWith(mes)).length;
-  const delta = last&&prev? (last.a+last.f)-(prev.a+prev.f) : null;
+  /* Horas del día repartidas entre armado y revestimiento (el revestimiento pesa 1+factor), como en el resto del programa */
+  const wF=1+(Number(st.cfg.factorForrado)||0), hrs=d=>{ const den=d.a+wF*d.f; return den>0? {hA:G.hd*d.a/den, hF:G.hd*wF*d.f/den} : {hA:0,hF:0}; };
+  const hA=per.reduce((s,d)=>s+hrs(d).hA,0), hF=per.reduce((s,d)=>s+hrs(d).hF,0);
+  const totA=G.Rs.reduce((s,R)=>s+R.doneA,0), totF=G.Rs.reduce((s,R)=>s+R.doneF,0);
+  const mes=todayS().slice(0,7), dMes=ds.filter(d=>d.fecha.startsWith(mes)), mesDias=dMes.length;
+  const mesA=dMes.reduce((s,d)=>s+d.a,0), mesF=dMes.reduce((s,d)=>s+d.f,0);
+  const nDias = per.length<n ? `solo hay ${per.length} día${per.length===1?"":"s"} con ficha` : `${per.length} días con ficha`;
+  const fila=(nombre,color,k,sum,h,mesK,tot)=>{
+    const ult=last? last[k]:null, ant=prev? prev[k]:null, delta = ult!=null&&ant!=null? ult-ant : null, prom=per.length? sum/per.length:0;
+    return `<div style="display:grid;gap:8px"><h2 class="row" style="gap:8px"><i class="sq" style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${color}"></i>${nombre}</h2>
+    <div class="tiles">
+      <div class="tile"><span class="lbl">Último día${last?` · ${fmtD(last.fecha)}`:""}</span><span class="v num">${ult!=null?kg(ult):"—"} <small>kg</small></span><span class="s num">${delta!=null?`${delta>=0?"+":"−"}${kg(Math.abs(delta))} kg respecto del día anterior`:last?"":"Sin fichas"}</span></div>
+      <div class="tile"><span class="lbl">Promedio diario · últimos ${n} días</span><span class="v num">${kg(prom)} <small>kg/día</small></span><span class="s num">${h>0?`${nf1.format(sum/h)} kg/h · `:""}${nDias}</span></div>
+      <div class="tile"><span class="lbl">Este mes</span><span class="v num">${kg(mesK)} <small>kg</small></span><span class="s num">${mesDias} día${mesDias===1?"":"s"} con ficha</span></div>
+      <div class="tile"><span class="lbl">Acumulado total</span><span class="v num">${kg(tot)} <small>kg</small></span><span class="s">${G.Rs.length} casa${G.Rs.length===1?"":"s"} · <a href="#casas">ver avance por casa</a></span></div>
+    </div></div>`; };
   el.innerHTML=`
   <div class="headline"><h1>Producción diaria del taller</h1><span class="meta">Todas las casas · ${ds.length} día${ds.length===1?"":"s"} con ficha${last?` · última ficha ${fmtDY(last.fecha)}`:""}</span></div>
-  <div class="tiles">
-    <div class="tile"><span class="lbl">Último día${last?` · ${fmtD(last.fecha)}`:""}</span><span class="v num">${last?kg(last.a+last.f):"—"} <small>kg</small></span><span class="s num">${last?`Estructura ${kg(last.a)} · Revestimiento ${kg(last.f)}`:"Sin fichas"}${delta!=null?`<br>${delta>=0?"+":"−"}${kg(Math.abs(delta))} kg respecto del día anterior`:""}</span></div>
-    <div class="tile"><span class="lbl">Promedio diario · últimos ${n} días</span><span class="v num">${kg(avg)} <small>kg/día</small></span><span class="s num">${nf1.format(avg/G.hd)} kg/h con ${G.hd} h efectivas · ${per.length<n?`solo hay ${per.length} día${per.length===1?"":"s"} con ficha`:`${per.length} días con ficha`}</span></div>
-    <div class="tile"><span class="lbl">Este mes</span><span class="v num">${kg(mesKg)} <small>kg</small></span><span class="s num">${mesDias} día${mesDias===1?"":"s"} con ficha</span></div>
-    <div class="tile"><span class="lbl">Acumulado total</span><span class="v num">${kg(tot)} <small>kg</small></span><span class="s">${G.Rs.length} casa${G.Rs.length===1?"":"s"} · <a href="#casas">ver avance por casa</a></span></div>
-  </div>
+  ${fila("Armado (estructura)","var(--armado)","a",sumA,hA,mesA,totA)}
+  ${fila("Revestimiento (OSB + EPS)","var(--forrado)","f",sumF,hF,mesF,totF)}
   <div class="panel"><div class="row"><h2 class="grow">Kg fabricados por día</h2><div class="row small" role="group" aria-label="Período" style="gap:4px"><span class="lbl">Últimos</span>${[5,10,20,30].map(v=>`<button class="${v===n?"pri":"ghost"} small" data-rango="${v}" aria-pressed="${v===n}">${v} días</button>`).join("")}</div></div><div class="chart" id="chGlobal"></div></div>
   <div class="panel" style="display:grid;gap:10px"><h2>Detalle diario</h2>
     ${per.length?`<div class="tablewrap"><table class="num"><tr><th>Fecha</th><th class="r">Estructura kg</th><th class="r">Revestimiento kg</th><th class="r">Total kg</th><th class="r">kg/h</th><th>Casas</th></tr>
