@@ -124,6 +124,7 @@ details.casa[open] .muted.small+span{}
       <a href="#produccion" data-v="produccion">Producción diaria</a>
       <a href="#casas" data-v="casas">Casas</a>
       <a href="#detalle" data-v="detalle">Detalle casa</a>
+      <a href="#rendimientos" data-v="rendimientos" class="adminOnly">Rendimientos</a>
       <a href="#cargar" data-v="cargar" class="adminOnly">Cargar ficha</a>
       <a href="#fichas" data-v="fichas" class="adminOnly">Fichas</a>
       <a href="#obras" data-v="obras" class="adminOnly">Configuración</a>
@@ -138,6 +139,7 @@ details.casa[open] .muted.small+span{}
   <section id="v-prod" data-view hidden></section>
   <section id="v-casas" data-view hidden></section>
   <section id="v-resumen" data-view hidden></section>
+  <section id="v-rend" data-view hidden></section>
 
   <!-- CARGAR -->
   <section id="v-cargar" data-view hidden>
@@ -197,7 +199,7 @@ let PILOTO = {OSORNO:{a:72.34,f:66.59,ref:"Osorno piloto, ago 2026"}, TENGLO:{a:
 const tiposList = () => Object.keys(CAT);
 let CATMETA = {}; /* tipo -> {nombre, actualizado} */
 const catName = t => (CATMETA[t] && CATMETA[t].nombre) || t;
-const DEF_CFG = {horasDia:7, factorForrado:0.3, sabado:false, feriados:[], sinForrado:[], sinKgTipos:[]};
+const DEF_CFG = {horasDia:7, factorForrado:0.3, sabado:false, feriados:[], sinForrado:[], sinKgTipos:[], personas:7};
 
 const norm = s => String(s||"").toUpperCase().replace(/[\s\-_–—:]+/g,"").replace(/,/g,".").replace(/^\.+|\.+$/g,"").replace(/[^A-Z0-9.]/g,"");
 let IDX = {};
@@ -753,6 +755,7 @@ function renderObras(){
     <div class="form">
       <label>Horas efectivas por día<input type="number" step="0.5" min="1" id="pHoras" value="${cfg.horasDia}"></label>
       <label>Revestimiento más lento que armado (factor)<input type="number" step="0.05" min="0" id="pFactor" value="${cfg.factorForrado}"></label>
+      <label>Personas en el equipo<input type="number" step="1" min="1" id="pPers" value="${cfg.personas||7}"></label>
       <label>Días hábiles<select id="pSab"><option value="0"${cfg.sabado?"":" selected"}>Lunes a viernes</option><option value="1"${cfg.sabado?" selected":""}>Lunes a sábado</option></select></label>
       <label style="grid-column:1/-1">Feriados (AAAA-MM-DD, separados por coma)<input type="text" id="pFer" value="${esc((cfg.feriados||[]).join(", "))}"></label>
       <label style="grid-column:1/-1">Elementos sin revestimiento en taller (inicio del código, separados por coma)<input type="text" id="pSinF" value="${esc((cfg.sinForrado||[]).join(", "))}" placeholder="Ej: BW"><span class="small muted">Su revestimiento no se cuenta en kg totales, avance, plan ni proyección. Deja vacío para contarlo.</span></label>
@@ -772,7 +775,7 @@ function renderObras(){
   if($("pSave")) $("pSave").onclick=async()=>{ const fer=$("pFer").value.split(/[,\s]+/).map(s=>s.trim()).filter(s=>/^\d{4}-\d{2}-\d{2}$/.test(s));
     const sinF=$("pSinF").value.split(/[,;]+/).map(s=>s.trim().toUpperCase()).filter(Boolean);
     const sinKg=$("pSinKg").value.split(/[,;]+/).map(s=>s.trim()).filter(Boolean);
-    const doc={horasDia:Math.max(1,+$("pHoras").value||7), factorForrado:Math.max(0,+$("pFactor").value||0), sabado:$("pSab").value==="1", feriados:fer, sinForrado:sinF, sinKgTipos:sinKg};
+    const doc={horasDia:Math.max(1,+$("pHoras").value||7), factorForrado:Math.max(0,+$("pFactor").value||0), sabado:$("pSab").value==="1", feriados:fer, sinForrado:sinF, sinKgTipos:sinKg, personas:Math.max(1,Math.round(+$("pPers").value||7))};
     try{ await st.db.collection("config").doc("general").set(doc); toast("Parámetros guardados"); }catch(e){ toast("No se pudo guardar: "+(e.message||e.code)); } };
 }
 
@@ -956,6 +959,69 @@ async function admImport(file){
   }catch(e){ A.note="No se pudo leer el Excel: "+esc(e.message||e); A.noteCls="err"; renderAdmin(); }
 }
 
+
+/* ---------- Vista: Rendimientos por elemento (horas-hombre) ---------- */
+const GRUPOS=["1er piso","Entrepiso","2do piso","Escalera"];
+function grupoDe(tipo){ const t=String(tipo||"").toLowerCase();
+  if(/1\s*°?\s*piso|primer/.test(t)) return "1er piso";
+  if(/2\s*°?\s*piso|segundo/.test(t)) return "2do piso";
+  if(/entrepiso/.test(t)) return "Entrepiso";
+  if(/escal/.test(t)) return "Escalera";
+  return String(tipo||"Otros").replace(/^\w/,c=>c.toUpperCase()); }
+function computeRend(){
+  const cfg=st.cfg, hd=Number(cfg.horasDia)||7, per=Math.max(1,Number(cfg.personas)||7), hhDia=hd*per, w=1+(Number(cfg.factorForrado)||0);
+  const casas=new Map(st.casas.map(c=>[c.id,c]));
+  const fichas=[...st.fichas].sort((x,y)=>x.fecha<y.fecha?-1:x.fecha>y.fecha?1:(x.creado||0)-(y.creado||0));
+  const seen=new Map(); const days=new Map(); /* fecha -> [{g,a,f}] */
+  for(const fi of fichas) for(const it of (fi.items||[])){
+    const c=casas.get(itemCasa(fi,it)); if(!c) continue; const m=match(c.tipo,it); if(!m || m.a+m.f<=0) continue;
+    const k=c.id+"|"+m.code, p=seen.get(k)||{a:0,o:0}; seen.set(k,p); const q=Math.max(1,Number(it.q)||1);
+    let a=0,f=0;
+    if(it.e){ const ok=Math.min(q,m.q-p.a); if(ok>0){ p.a+=ok; a=ok*m.a; } }
+    if(it.o && m.f>0){ const ok=Math.min(q,m.q-p.o); if(ok>0){ p.o+=ok; f=ok*m.f; } }
+    if(a+f<=0) continue;
+    (days.get(fi.fecha)||days.set(fi.fecha,[]).get(fi.fecha)).push({g:grupoDe(m.tipo),a,f});
+  }
+  const G=new Map(); const get=g=>G.get(g)||G.set(g,{g,a:0,f:0,hA:0,hF:0,dias:new Set()}).get(g);
+  for(const [fecha,list] of days){ const den=list.reduce((s,x)=>s+x.a+w*x.f,0); if(den<=0) continue;
+    for(const x of list){ const r=get(x.g); r.a+=x.a; r.f+=x.f; r.hA+=hhDia*x.a/den; r.hF+=hhDia*w*x.f/den; r.dias.add(fecha); } }
+  /* kg por casa de cada grupo, según el catálogo de cada tipo de casa en uso */
+  const tipos=[...new Set(st.casas.map(c=>c.tipo))].filter(t=>CAT[t]);
+  const catKg={}; for(const t of tipos){ catKg[t]={}; for(const [tipo,code,q,a,f] of CAT[t]){ if(a+f<=0) continue; const g=grupoDe(tipo); const o=catKg[t][g]||(catKg[t][g]={a:0,f:0}); o.a+=q*a; o.f+=q*f; } }
+  const allG=new Set([...G.keys(), ...tipos.flatMap(t=>Object.keys(catKg[t]))]);
+  const rows=[...allG].map(g=>{ const r=G.get(g)||{g,a:0,f:0,hA:0,hF:0,dias:new Set()}; return {...r, nd:r.dias.size, kphA:r.hA>0?r.a/r.hA:null, kphF:r.hF>0?r.f/r.hF:null}; })
+    .sort((x,y)=>{ const ix=GRUPOS.indexOf(x.g), iy=GRUPOS.indexOf(y.g); return (ix<0?99:ix)-(iy<0?99:iy) || x.g.localeCompare(y.g); });
+  /* HH estimadas para una casa completa: kg del catálogo ÷ kg/HH real (si no hay dato, rendimiento piloto ÷ personas) */
+  const est=(t,r)=>{ const k=catKg[t][r.g]; if(!k) return null; const pil=PILOTO[t]||{a:60,f:60};
+    const rA=r.kphA ?? pil.a/per, rF=r.kphF ?? pil.f/per; const hA=k.a/rA, hF=k.f>0? k.f/rF : 0;
+    return {hA,hF,h:hA+hF,real:!!(r.kphA && (k.f<=0 || r.kphF))}; };
+  const totDias=days.size, totHH=totDias*hhDia;
+  return {rows,tipos,catKg,est,hd,per,hhDia,totDias,totHH};
+}
+function renderRend(){
+  const el=$("v-rend");
+  if(st.dbState!=="ok"){ el.innerHTML=statePanel(); return; }
+  const R=computeRend(), nf0=new Intl.NumberFormat("es-CL",{maximumFractionDigits:0}), nf2=new Intl.NumberFormat("es-CL",{maximumFractionDigits:2,minimumFractionDigits:2});
+  const hh=v=>v==null?"—":nf0.format(v), kph=v=>v==null?`<span class="muted">—</span>`:nf2.format(v);
+  const main=R.rows.filter(r=>GRUPOS.includes(r.g)), otros=R.rows.filter(r=>!GRUPOS.includes(r.g));
+  const t0=R.tipos[0];
+  const tabla=rows=>`<div class="tablewrap"><table class="num"><tr><th>Elemento</th><th class="r">Días con producción</th><th class="r">Kg estructura</th><th class="r">HH estructura</th><th class="r">Kg/HH estructura</th><th class="r">Kg revestimiento</th><th class="r">HH revestimiento</th><th class="r">Kg/HH revestimiento</th><th class="r">HH totales usadas</th>${R.tipos.map(t=>`<th class="r">HH por casa ${esc(catName(t))}</th><th class="r">Días de equipo por casa</th>`).join("")}</tr>
+    ${rows.map(r=>`<tr><td><b>${esc(r.g)}</b></td><td class="r">${r.nd||"—"}</td><td class="r">${kg(r.a)}</td><td class="r">${hh(r.hA)}</td><td class="r">${kph(r.kphA)}</td><td class="r">${r.f>0?kg(r.f):"—"}</td><td class="r">${r.hF>0?hh(r.hF):"—"}</td><td class="r">${kph(r.kphF)}</td><td class="r"><b>${hh(r.hA+r.hF)}</b></td>
+      ${R.tipos.map(t=>{ const e=R.est(t,r); return e?`<td class="r"><b>${hh(e.h)}</b>${e.real?"":` <span class="chip neutral" title="Sin producción registrada: estimado con el rendimiento piloto">piloto</span>`}</td><td class="r">${nf1.format(e.h/R.hhDia)}</td>`:`<td class="r muted">—</td><td class="r muted">—</td>`; }).join("")}</tr>`).join("")}
+  </table></div>`;
+  const tot=main.reduce((s,r)=>s+r.hA+r.hF,0)+otros.reduce((s,r)=>s+r.hA+r.hF,0);
+  const casaTot=t0? R.rows.reduce((s,r)=>{ const e=R.est(t0,r); return s+(e?e.h:0); },0) : 0;
+  el.innerHTML=`
+  <div class="headline"><h1>Rendimientos por elemento</h1><span class="meta">Acumulado a la fecha · ${R.totDias} día${R.totDias===1?"":"s"} con ficha · equipo de ${R.per} personas × ${nf1.format(R.hd)} h = ${nf1.format(R.hhDia)} HH por día</span></div>
+  <div class="tiles">
+    <div class="tile"><span class="lbl">HH trabajadas</span><span class="v num">${hh(R.totHH)}</span><span class="s">${R.totDias} días × ${nf1.format(R.hhDia)} HH</span></div>
+    ${t0?`<div class="tile"><span class="lbl">HH por casa ${esc(catName(t0))}</span><span class="v num">${hh(casaTot)}</span><span class="s">${nf1.format(casaTot/R.hhDia)} días de equipo, con el rendimiento real a la fecha</span></div>`:""}
+  </div>
+  <div class="panel"><h2>Elementos principales</h2>${tabla(main)}</div>
+  ${otros.length?`<div class="panel"><h2>Otros elementos</h2>${tabla(otros)}</div>`:""}
+  <p class="small muted">Las horas de cada día (${nf1.format(R.hhDia)} HH) se reparten entre los elementos fabricados ese día según sus kg, con el revestimiento pesando ${nf1.format(1+(Number(st.cfg.factorForrado)||0))} veces la estructura, igual que en el resto del programa. HH por casa = kg del elemento en el catálogo ÷ kg/HH real; donde aún no hay producción se usa el rendimiento piloto. Los tipos que no suman kg (${esc((st.cfg.sinKgTipos||[]).join(", ")||"ninguno")}) no se consideran. Personas y horas por día se cambian en Configuración.</p>`;
+}
+
 /* ---------- Vista: Producción diaria global (todas las casas) ---------- */
 function computeGlobal(){
   const Rs = st.casas.map(c=>computeCasa(c)); const days=new Map();
@@ -1054,15 +1120,15 @@ function renderCasas(){
 }
 
 /* ---------- Navegación ---------- */
-const VIEWS=["produccion","casas","detalle","cargar","fichas","obras","admin"];
-const SECTION={produccion:"v-prod",casas:"v-casas",detalle:"v-resumen",cargar:"v-cargar",fichas:"v-fichas",obras:"v-obras",admin:"v-admin"};
+const VIEWS=["produccion","casas","detalle","rendimientos","cargar","fichas","obras","admin"];
+const SECTION={produccion:"v-prod",casas:"v-casas",detalle:"v-resumen",rendimientos:"v-rend",cargar:"v-cargar",fichas:"v-fichas",obras:"v-obras",admin:"v-admin"};
 const READER_VIEWS=["produccion","casas","detalle"];
 function view(){ let h=location.hash.slice(1); if(h==="resumen") h="detalle"; if(!VIEWS.includes(h)) return "produccion"; return (st.isAdmin||READER_VIEWS.includes(h))? h : "produccion"; }
 function render(){
   const v=view();
   document.querySelectorAll("[data-view]").forEach(s=>s.hidden = s.id!==SECTION[v]);
   document.querySelectorAll("#tabs a").forEach(a=>{ if(a.dataset.v===v) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current"); });
-  if(v==="produccion") renderProduccion(); else if(v==="casas") renderCasas(); else if(v==="detalle") renderResumen(); else if(v==="cargar") renderCargar(); else if(v==="fichas") renderFichas(); else if(v==="admin") renderAdmin(); else renderObras();
+  if(v==="produccion") renderProduccion(); else if(v==="casas") renderCasas(); else if(v==="detalle") renderResumen(); else if(v==="rendimientos") renderRend(); else if(v==="cargar") renderCargar(); else if(v==="fichas") renderFichas(); else if(v==="admin") renderAdmin(); else renderObras();
 }
 function saveSel(){ try{ localStorage.setItem("dmia.casa", st.casaId||""); }catch(e){} }
 let toastT; function toast(t){ let el=document.querySelector(".toast"); if(!el){ el=document.createElement("div"); el.className="toast"; el.setAttribute("role","status"); document.body.appendChild(el); } el.textContent=t; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>el.hidden=true,2600); }
