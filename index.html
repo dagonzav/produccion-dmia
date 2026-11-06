@@ -241,7 +241,7 @@ const $ = id => document.getElementById(id);
 
 /* ---------- Estado ---------- */
 const st = { db:null, casas:[], fichas:[], cfg:{...DEF_CFG}, loaded:{casas:false,fichas:false}, casaId:null, corte:null, draft:null, editId:null, dbState:"connecting", isAdmin:false, adm:null };
-try { st.casaId = localStorage.getItem("dmia.casa"); } catch(e){}
+try { st.casaId = localStorage.getItem("dmia.casa"); st.rango = +localStorage.getItem("dmia.rango")||10; } catch(e){}
 
 /* Cada fila de una ficha puede ser de una casa distinta; sin casa propia, es la casa de la ficha */
 const itemCasa = (fi,it) => it.casaId || fi.casaId;
@@ -1053,7 +1053,7 @@ function renderProduccion(){
   if(st.dbState!=="ok"){ el.innerHTML=statePanel(); return; }
   if(!st.casas.length){ el.innerHTML=`<div class="panel empty"><h2>Crea la primera casa</h2><p class="adminOnly">Define la casa en fabricación y su fecha de inicio para empezar el seguimiento.</p><a class="adminOnly" href="#obras"><button class="pri">Ir a Configuración</button></a></div>`; return; }
   const G=computeGlobal(), ds=G.daily, last=ds[ds.length-1], prev=ds[ds.length-2];
-  const n=st.rango||20, per=ds.slice(-n);
+  const n=[5,10,20,30].includes(st.rango)?st.rango:10, per=ds.slice(-n);
   const sumA=per.reduce((s,d)=>s+d.a,0), sumF=per.reduce((s,d)=>s+d.f,0), avg=per.length?(sumA+sumF)/per.length:0;
   const tot=G.Rs.reduce((s,R)=>s+R.done,0);
   const mes=todayS().slice(0,7), mesKg=ds.filter(d=>d.fecha.startsWith(mes)).reduce((s,d)=>s+d.a+d.f,0), mesDias=ds.filter(d=>d.fecha.startsWith(mes)).length;
@@ -1062,18 +1062,18 @@ function renderProduccion(){
   <div class="headline"><h1>Producción diaria del taller</h1><span class="meta">Todas las casas · ${ds.length} día${ds.length===1?"":"s"} con ficha${last?` · última ficha ${fmtDY(last.fecha)}`:""}</span></div>
   <div class="tiles">
     <div class="tile"><span class="lbl">Último día${last?` · ${fmtD(last.fecha)}`:""}</span><span class="v num">${last?kg(last.a+last.f):"—"} <small>kg</small></span><span class="s num">${last?`Estructura ${kg(last.a)} · Revestimiento ${kg(last.f)}`:"Sin fichas"}${delta!=null?`<br>${delta>=0?"+":"−"}${kg(Math.abs(delta))} kg respecto del día anterior`:""}</span></div>
-    <div class="tile"><span class="lbl">Promedio diario</span><span class="v num">${kg(avg)} <small>kg/día</small></span><span class="s num">${nf1.format(avg/G.hd)} kg/h con ${G.hd} h efectivas · últimos ${per.length} días con ficha</span></div>
+    <div class="tile"><span class="lbl">Promedio diario · últimos ${n} días</span><span class="v num">${kg(avg)} <small>kg/día</small></span><span class="s num">${nf1.format(avg/G.hd)} kg/h con ${G.hd} h efectivas · ${per.length<n?`solo hay ${per.length} día${per.length===1?"":"s"} con ficha`:`${per.length} días con ficha`}</span></div>
     <div class="tile"><span class="lbl">Este mes</span><span class="v num">${kg(mesKg)} <small>kg</small></span><span class="s num">${mesDias} día${mesDias===1?"":"s"} con ficha</span></div>
     <div class="tile"><span class="lbl">Acumulado total</span><span class="v num">${kg(tot)} <small>kg</small></span><span class="s">${G.Rs.length} casa${G.Rs.length===1?"":"s"} · <a href="#casas">ver avance por casa</a></span></div>
   </div>
-  <div class="panel"><div class="row"><h2 class="grow">Kg fabricados por día</h2><label class="row small" for="rango"><span class="lbl">Mostrar</span><select id="rango">${[10,20,40,80].map(v=>`<option value="${v}"${v===n?" selected":""}>Últimos ${v} días</option>`).join("")}</select></label></div><div class="chart" id="chGlobal"></div></div>
+  <div class="panel"><div class="row"><h2 class="grow">Kg fabricados por día</h2><div class="row small" role="group" aria-label="Período" style="gap:4px"><span class="lbl">Últimos</span>${[5,10,20,30].map(v=>`<button class="${v===n?"pri":"ghost"} small" data-rango="${v}" aria-pressed="${v===n}">${v} días</button>`).join("")}</div></div><div class="chart" id="chGlobal"></div></div>
   <div class="panel" style="display:grid;gap:10px"><h2>Detalle diario</h2>
     ${per.length?`<div class="tablewrap"><table class="num"><tr><th>Fecha</th><th class="r">Estructura kg</th><th class="r">Revestimiento kg</th><th class="r">Total kg</th><th class="r">kg/h</th><th>Casas</th></tr>
     ${[...per].reverse().map(d=>`<tr><td>${fmtD(d.fecha)}</td><td class="r">${kg(d.a)}</td><td class="r">${kg(d.f)}</td><td class="r"><b>${kg(d.a+d.f)}</b></td><td class="r">${nf1.format(d.kgh)}</td><td class="small">${d.casas.map(c=>`${esc(c.nombre)} <span class="muted">${kg(c.a+c.f)}</span>`).join(" · ")}</td></tr>`).join("")}
     <tr><td><b>Período</b></td><td class="r"><b>${kg(sumA)}</b></td><td class="r"><b>${kg(sumF)}</b></td><td class="r"><b>${kg(sumA+sumF)}</b></td><td class="r"><b>${nf1.format(avg/G.hd)}</b></td><td></td></tr></table></div>`:`<div class="empty small">Aún no hay fichas registradas para esta casa.</div>`}
   </div>`;
   chartGlobal($("chGlobal"),G,n);
-  $("rango").onchange=e=>{ st.rango=+e.target.value; renderProduccion(); };
+  el.querySelectorAll("[data-rango]").forEach(b=>b.onclick=()=>{ st.rango=+b.dataset.rango; try{ localStorage.setItem("dmia.rango",st.rango); }catch(e){} renderProduccion(); });
 }
 
 /* ---------- Vista: Casas (avance y tabiques) ---------- */
