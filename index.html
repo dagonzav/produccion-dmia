@@ -1086,7 +1086,7 @@ function renderProduccion(){
   el.innerHTML=`
   <div class="headline"><h1>Producción diaria del taller</h1><span class="meta">Todas las casas · ${ds.length} día${ds.length===1?"":"s"} con ficha${last?` · última ficha ${fmtDY(last.fecha)}`:""}</span></div>
   ${fila("Armado (estructura)","var(--armado)","a",sumA,hA,mesA,totA)}
-  ${fila("Revestimiento (OSB + EPS)","var(--forrado)","fm",sumM,hF,mesM,totM)}
+  ${fila("Revestimiento (OSB + EPS)","var(--forrado)","f",sumF,hF,mesF,totF)}
   <div class="panel"><div class="row"><h2 class="grow">Kg fabricados por día</h2><div class="row small" role="group" aria-label="Período" style="gap:4px"><span class="lbl">Últimos</span>${[5,10,20,30].map(v=>`<button class="${v===n?"pri":"ghost"} small" data-rango="${v}" aria-pressed="${v===n}">${v} días</button>`).join("")}</div></div><div class="chart" id="chGlobal"></div></div>
   <div class="panel" style="display:grid;gap:10px"><h2>Detalle diario</h2>
     ${per.length?`<div class="tablewrap"><table class="num"><tr><th>Fecha</th><th class="r">Estructura kg</th><th class="r">Revestimiento m²</th><th class="r">Total kg</th><th class="r">kg/h</th><th>Casas</th></tr>
