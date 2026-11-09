@@ -203,7 +203,7 @@ const DEF_CFG = {horasDia:7, factorForrado:0.3, sabado:false, feriados:[], sinFo
 
 const norm = s => String(s||"").toUpperCase().replace(/[\s\-_–—:]+/g,"").replace(/,/g,".").replace(/^\.+|\.+$/g,"").replace(/[^A-Z0-9.]/g,"");
 let IDX = {};
-function rebuildIdx(){ IDX={}; for(const t of Object.keys(CAT)){ IDX[t]=new Map(); CAT[t].forEach(([tipo,code,q,a,f])=>IDX[t].set(norm(code),{tipo,code,q,a,f})); } }
+function rebuildIdx(){ IDX={}; for(const t of Object.keys(CAT)){ IDX[t]=new Map(); CAT[t].forEach(r=>{ const [tipo,code,q,a,f]=r; IDX[t].set(norm(code),{tipo,code,q,a,f,m:m2u(r)}); }); } }
 rebuildIdx();
 /* RAWCAT: catálogo tal como está en la base. CAT: el que se usa para calcular, sin el revestimiento de los elementos que hoy no se forran en taller */
 let RAWCAT = CAT;
@@ -212,11 +212,12 @@ const noForrado = code => { const k=norm(code); return sinForradoPre().some(p=>k
 /* Tipos de elemento que quedan en el catálogo pero no suman kg (ej. Perfil) */
 const sinKgSet = () => new Set((st.cfg.sinKgTipos||[]).map(t=>String(t).trim().toLowerCase()).filter(Boolean));
 const noSumaKg = tipo => sinKgSet().has(String(tipo||"").trim().toLowerCase());
-/* Revestimiento en m²: kg de EPS+OSB ÷ kg por m² (planilla BD: EPS 0,90 + OSB 7,48 = 8,38 kg/m²) */
-const kgM2 = () => Number(st.cfg.kgM2Rev)>0 ? Number(st.cfg.kgM2Rev) : 8.38;
-const m2 = kgF => kgF/kgM2();
-const fm2 = kgF => nf1.format(m2(kgF));
-function applyCfg(){ const out={}; for(const t of Object.keys(RAWCAT)) out[t]=RAWCAT[t].map(r=> noSumaKg(r[0]) ? [r[0],r[1],r[2],0,0] : noForrado(r[1]) ? [r[0],r[1],r[2],r[3],0] : r); CAT=out; rebuildIdx(); }
+/* Revestimiento en m²: cada elemento revestido trae su superficie (Panel m2) de la hoja BD original.
+   Solo si un elemento no la tiene se estima con kg ÷ 8,38 kg/m² (EPS 0,90 + OSB 7,48). */
+function kgM2(){ let v=0; try{ v=Number(st.cfg.kgM2Rev); }catch(e){} return v>0 ? v : 8.38; }
+function m2u(r){ const f=+r[4]||0, m=+r[5]||0; return f<=0 ? 0 : (m>0 ? m : f/kgM2()); }
+const fm2 = v => nf1.format(v||0);
+function applyCfg(){ const out={}; for(const t of Object.keys(RAWCAT)) out[t]=RAWCAT[t].map(r=> noSumaKg(r[0]) ? [r[0],r[1],r[2],0,0,0] : noForrado(r[1]) ? [r[0],r[1],r[2],r[3],0,0] : r); CAT=out; rebuildIdx(); }
 const lookup = (tipo,code) => (code && IDX[tipo] && IDX[tipo].get(norm(code))) || null;
 /* Una fila de ficha guarda el código reconocido (c) y lo escrito (raw); si el catálogo cambia, se vuelve a reconocer por lo escrito */
 const match = (tipo,it) => lookup(tipo,it.c) || lookup(tipo,it.raw);
@@ -254,8 +255,8 @@ const fichaCasas = fi => [...new Set((fi.items||[]).map(it=>itemCasa(fi,it)))];
 /* ---------- Cálculo de una casa ---------- */
 function computeCasa(casa){
   const cfg = st.cfg, cat = CAT[casa.tipo]||[], pil = PILOTO[casa.tipo]||{a:60,f:60};
-  let totA=0,totF=0; const byTipo={};
-  for(const [tipo,code,q,a,f] of cat){ totA+=q*a; totF+=q*f; (byTipo[tipo] ||= {tipo,tot:0,done:0,n:0,nd:0}); byTipo[tipo].tot+=q*(a+f); byTipo[tipo].n+=q; }
+  let totA=0,totF=0,totM=0; const byTipo={};
+  for(const r of cat){ const [tipo,code,q,a,f]=r; totA+=q*a; totF+=q*f; totM+=q*m2u(r); (byTipo[tipo] ||= {tipo,tot:0,done:0,n:0,nd:0}); byTipo[tipo].tot+=q*(a+f); byTipo[tipo].n+=q; }
   const fichas = st.fichas.filter(f=>fichaCasas(f).includes(casa.id)).sort((x,y)=>x.fecha<y.fecha?-1:x.fecha>y.fecha?1:(x.creado||0)-(y.creado||0));
   const prod = new Map(); /* code -> {a:qty,o:qty} */
   const days = new Map(); /* fecha -> {a,f,n} */
@@ -263,18 +264,18 @@ function computeCasa(casa){
   for(const fi of fichas){
     for(const it of (fi.items||[])){
       if(itemCasa(fi,it)!==casa.id) continue;
-      const day = days.get(fi.fecha) || {fecha:fi.fecha,a:0,f:0,n:0}; days.set(fi.fecha,day);
+      const day = days.get(fi.fecha) || {fecha:fi.fecha,a:0,f:0,fm:0,n:0}; days.set(fi.fecha,day);
       const m = match(casa.tipo,it);
       if(!m){ if(it.raw||it.c) issues.push({fecha:fi.fecha,raw:it.raw||it.c,why:"No está en el catálogo"}); continue; }
       const p = prod.get(m.code) || {a:0,o:0}; prod.set(m.code,p);
       const q = Math.max(1, Number(it.q)||1);
       if(it.e){ const ok=Math.min(q, m.q-p.a); if(ok<q) issues.push({fecha:fi.fecha,raw:m.code,why:"Estructura repetida: ya estaba contada, no suma de nuevo"}); if(ok>0){ p.a+=ok; p.fa=fi.fecha; day.a+=ok*m.a; day.n++; } }
       if(it.o){ if(m.f<=0){ issues.push({fecha:fi.fecha,raw:m.code,why:noForrado(m.code)?"OSB marcado, pero el revestimiento de este elemento no se cuenta (no se hace en taller)":"Elemento sin revestimiento en el catálogo"}); }
-        else { const ok=Math.min(q, m.q-p.o); if(ok<q) issues.push({fecha:fi.fecha,raw:m.code,why:"OSB repetido: ya estaba contado, no suma de nuevo"}); if(ok>0){ p.o+=ok; p.fo=fi.fecha; day.f+=ok*m.f; } } }
+        else { const ok=Math.min(q, m.q-p.o); if(ok<q) issues.push({fecha:fi.fecha,raw:m.code,why:"OSB repetido: ya estaba contado, no suma de nuevo"}); if(ok>0){ p.o+=ok; p.fo=fi.fecha; day.f+=ok*m.f; day.fm+=ok*m.m; } } }
     }
   }
-  let doneA=0, doneF=0;
-  for(const [tipo,code,q,a,f] of cat){ const p=prod.get(code); if(!p) continue; const v=p.a*a+p.o*f; doneA+=p.a*a; doneF+=p.o*f; byTipo[tipo].done+=v; if(p.a>=q && (f<=0 || p.o>=q)) byTipo[tipo].nd+=q; elemDone.set(code,p); }
+  let doneA=0, doneF=0, doneM=0;
+  for(const r of cat){ const [tipo,code,q,a,f]=r; const p=prod.get(code); if(!p) continue; const v=p.a*a+p.o*f; doneA+=p.a*a; doneF+=p.o*f; doneM+=p.o*m2u(r); byTipo[tipo].done+=v; if(p.a>=q && (f<=0 || p.o>=q)) byTipo[tipo].nd+=q; elemDone.set(code,p); }
   /* Horas por día repartidas como en la planilla piloto: el revestimiento pesa (1+factor) */
   const w = 1+(Number(cfg.factorForrado)||0), hd = Number(cfg.horasDia)||7;
   const daily = [...days.values()].sort((x,y)=>x.fecha<y.fecha?-1:1).map(d=>{
@@ -285,6 +286,9 @@ function computeCasa(casa){
   const hA = daily.reduce((s,d)=>s+d.hA,0), hF = daily.reduce((s,d)=>s+d.hF,0);
   const rateA = hA>0.5 ? sA/hA : pil.a, rateF = hF>0.5 ? sF/hF : pil.f;
   const rateSrcA = hA>0.5 ? "real" : "piloto", rateSrcF = hF>0.5 ? "real" : "piloto";
+  /* Rendimiento de revestimiento en m²/h: real = m² revestidos ÷ horas; piloto = kg/h piloto × (m²/kg del catálogo de la casa) */
+  const sM = daily.reduce((s,d)=>s+(d.fm||0),0), m2kg = totF>0? totM/totF : 1/kgM2();
+  const rateM = hF>0.5 ? sM/hF : pil.f*m2kg, pilM = pil.f*m2kg;
   const total = totA+totF, done = doneA+doneF, avance = total? done/total:0;
   const nDias = daily.length;
   /* Plan */
@@ -308,7 +312,7 @@ function computeCasa(casa){
   const kgDia = nDias? (sA+sF)/nDias : 0;
   const kghReal = nDias? (sA+sF)/(nDias*hd) : 0;
   return {casa,cfg,totA,totF,total,doneA,doneF,done,avance,byTipo:Object.values(byTipo).filter(b=>!noSumaKg(b.tipo)),daily,fichas,issues,prod:elemDone,
-    rateA,rateF,rateSrcA,rateSrcF,pil,inicio:ini,termino,planDias,planSrc,corte,planHoy,planAt,retraso,adelanto,pendA,pendF,horasPend,diasPend,fechaProy,diffDias,kgDia,kghReal,nDias};
+    rateA,rateF,rateSrcA,rateSrcF,pil,totM,doneM,pendM:totM-doneM,rateM,pilM,inicio:ini,termino,planDias,planSrc,corte,planHoy,planAt,retraso,adelanto,pendA,pendF,horasPend,diasPend,fechaProy,diffDias,kgDia,kghReal,nDias};
 }
 
 /* ---------- Gráficos (SVG) ---------- */
@@ -379,7 +383,7 @@ function chartDiario(box, R){
   const meta = (R.pil.a*R.cfg.horasDia);
   g+=`<line x1="${L}" x2="${W-Rm}" y1="${Y(meta)}" y2="${Y(meta)}" stroke="var(--plan)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="${W-Rm}" y="${Y(meta)-5}" text-anchor="end">Ref. piloto estructura ${kg(meta)} kg/día</text>`;
   box.innerHTML = svgEl(W,H,g)+`<div class="legend"><span><i class="sq" style="background:var(--armado)"></i>Estructura (armado)</span><span><i class="sq" style="background:var(--forrado)"></i>OSB + EPS (revestimiento)</span></div>`;
-  attachTip(box, ds.map((d,i)=>({x:X(i), html:`<b>${fmtD(d.fecha)}</b><br>Estructura: ${kg(d.a)} kg<br>Revestimiento: ${fm2(d.f)} m² (${kg(d.f)} kg)<br>Total: ${kg(d.a+d.f)} kg · ${nf1.format(d.kgh)} kg/h`})));
+  attachTip(box, ds.map((d,i)=>({x:X(i), html:`<b>${fmtD(d.fecha)}</b><br>Estructura: ${kg(d.a)} kg<br>Revestimiento: ${fm2(d.fm)} m² (${kg(d.f)} kg)<br>Total: ${kg(d.a+d.f)} kg · ${nf1.format(d.kgh)} kg/h`})));
 }
 
 /* ---------- Vista: Resumen ---------- */
@@ -411,9 +415,9 @@ function renderResumen(){
       <h2>Rendimiento y proyección</h2>
       <div class="tablewrap"><table class="num">
         <tr><th></th><th class="r">Estructura</th><th class="r">Revestimiento</th></tr>
-        <tr><td>Rendimiento usado</td><td class="r">${nf1.format(R.rateA)} kg/h <span class="pill-tipo">${R.rateSrcA}</span></td><td class="r">${fm2(R.rateF)} m²/h <span class="pill-tipo">${R.rateSrcF}</span></td></tr>
-        <tr><td>Rendimiento piloto</td><td class="r">${nf1.format(R.pil.a)} kg/h</td><td class="r">${fm2(R.pil.f)} m²/h</td></tr>
-        <tr><td>Pendiente</td><td class="r">${kg(R.pendA)} kg</td><td class="r">${fm2(R.pendF)} m²</td></tr>
+        <tr><td>Rendimiento usado</td><td class="r">${nf1.format(R.rateA)} kg/h <span class="pill-tipo">${R.rateSrcA}</span></td><td class="r">${fm2(R.rateM)} m²/h <span class="pill-tipo">${R.rateSrcF}</span></td></tr>
+        <tr><td>Rendimiento piloto</td><td class="r">${nf1.format(R.pil.a)} kg/h</td><td class="r">${fm2(R.pilM)} m²/h</td></tr>
+        <tr><td>Pendiente</td><td class="r">${kg(R.pendA)} kg</td><td class="r">${fm2(R.pendM)} m²</td></tr>
         <tr><td>Horas pendientes</td><td class="r">${nf1.format(R.pendA/R.rateA)}</td><td class="r">${nf1.format(R.pendF/R.rateF)}</td></tr>
       </table></div>
       <p class="small" style="margin:0">Promedio real: <b class="num">${kg(R.kgDia)} kg/día</b> (${nf1.format(R.kghReal)} kg/h con ${R.cfg.horasDia} h efectivas). Faltan <b class="num">${nf1.format(Math.max(0,R.diasPend))} días hábiles</b> de trabajo al rendimiento usado.</p>
@@ -430,7 +434,7 @@ function renderResumen(){
   <div class="panel" style="display:grid;gap:10px">
     <div class="row"><h2 class="grow">Detalle diario</h2><button id="bExport" hidden>Descargar Excel</button></div>
     ${R.daily.length?`<div class="tablewrap"><table class="num"><tr><th>Fecha</th><th class="r">Estructura kg</th><th class="r">Revestimiento m²</th><th class="r">Total kg</th><th class="r">kg/h</th><th class="r">Avance acum.</th><th class="r">Plan</th></tr>
-    ${(()=>{let c=0; return R.daily.map(d=>{c+=d.a+d.f; return `<tr><td>${fmtD(d.fecha)}</td><td class="r">${kg(d.a)}</td><td class="r">${fm2(d.f)}</td><td class="r"><b>${kg(d.a+d.f)}</b></td><td class="r">${nf1.format(d.kgh)}</td><td class="r">${pct(c/R.total)}</td><td class="r">${pct(R.planAt(d.fecha))}</td></tr>`;}).join("");})()}
+    ${(()=>{let c=0; return R.daily.map(d=>{c+=d.a+d.f; return `<tr><td>${fmtD(d.fecha)}</td><td class="r">${kg(d.a)}</td><td class="r">${fm2(d.fm)}</td><td class="r"><b>${kg(d.a+d.f)}</b></td><td class="r">${nf1.format(d.kgh)}</td><td class="r">${pct(c/R.total)}</td><td class="r">${pct(R.planAt(d.fecha))}</td></tr>`;}).join("");})()}
     </table></div>`:`<div class="empty small">Aún no hay fichas registradas para esta casa.</div>`}
   </div>
   <details class="panel"><summary>Elementos de la casa (${(CAT[casa.tipo]||[]).length})</summary>
@@ -760,7 +764,7 @@ function renderObras(){
       <label>Horas efectivas por día<input type="number" step="0.5" min="1" id="pHoras" value="${cfg.horasDia}"></label>
       <label>Revestimiento más lento que armado (factor)<input type="number" step="0.05" min="0" id="pFactor" value="${cfg.factorForrado}"></label>
       <label>Personas en el equipo<input type="number" step="1" min="1" id="pPers" value="${cfg.personas||7}"></label>
-      <label>Kg por m² de revestimiento (EPS + OSB)<input type="number" step="0.01" min="0.1" id="pKgM2" value="${cfg.kgM2Rev||8.38}"></label>
+      <label>Kg por m² de revestimiento (solo si un elemento no tiene m²)<input type="number" step="0.01" min="0.1" id="pKgM2" value="${cfg.kgM2Rev||8.38}"></label>
       <label>Días hábiles<select id="pSab"><option value="0"${cfg.sabado?"":" selected"}>Lunes a viernes</option><option value="1"${cfg.sabado?" selected":""}>Lunes a sábado</option></select></label>
       <label style="grid-column:1/-1">Feriados (AAAA-MM-DD, separados por coma)<input type="text" id="pFer" value="${esc((cfg.feriados||[]).join(", "))}"></label>
       <label style="grid-column:1/-1">Elementos sin revestimiento en taller (inicio del código, separados por coma)<input type="text" id="pSinF" value="${esc((cfg.sinForrado||[]).join(", "))}" placeholder="Ej: BW"><span class="small muted">Su revestimiento no se cuenta en kg totales, avance, plan ni proyección. Deja vacío para contarlo.</span></label>
@@ -786,7 +790,7 @@ function renderObras(){
 
 /* ---------- Vista: Administración (catálogo de elementos y kg) ---------- */
 function admLoad(tipo){
-  const rows=(RAWCAT[tipo]||[]).map(([t,c,q,a,f])=>({t,c,q,a,f}));
+  const rows=(RAWCAT[tipo]||[]).map(([t,c,q,a,f,m])=>({t,c,q,a,f,m:+m||0}));
   const p=PILOTO[tipo]||{a:60,f:60,ref:""};
   st.adm={tipo, nombre:catName(tipo), rows, orig:new Map(rows.map(r=>[norm(r.c),{...r}])), pilA:p.a, pilF:p.f, ref:p.ref||"", dirty:false, filter:"", isNew:!CAT[tipo], removed:[], note:"", hist:null};
 }
@@ -862,7 +866,7 @@ function renderAdmin(){
   const bindNum=(id,k)=>$(id).addEventListener("input",e=>{ A[k]=e.target.type==="number"? +e.target.value : e.target.value; A.dirty=true; admDrawSum(); });
   bindNum("admPilA","pilA"); bindNum("admPilF","pilF"); bindNum("admRef","ref");
   $("admFilter").oninput=e=>{ A.filter=e.target.value; admDrawTable(); };
-  $("admAdd").onclick=()=>{ A.filter=""; $("admFilter").value=""; A.rows.push({t:A.rows.length?A.rows[A.rows.length-1].t:"",c:"",q:1,a:0,f:0}); A.dirty=true; admDrawTable(); admDrawSum(); const ins=$("admTable").querySelectorAll('input[data-k="c"]'); ins[ins.length-1]?.focus(); };
+  $("admAdd").onclick=()=>{ A.filter=""; $("admFilter").value=""; A.rows.push({t:A.rows.length?A.rows[A.rows.length-1].t:"",c:"",q:1,a:0,f:0,m:0}); A.dirty=true; admDrawTable(); admDrawSum(); const ins=$("admTable").querySelectorAll('input[data-k="c"]'); ins[ins.length-1]?.focus(); };
   $("admDiscard").onclick=()=>{ if(A.isNew){ st.adm=null; } else admLoad(A.tipo); renderAdmin(); };
   $("admSave").onclick=admSave;
   if($("admDel")) $("admDel").onclick=()=>{ const w=$("admDelW"); w.innerHTML=`<span class="small">¿Eliminar ${esc(A.nombre)}? Queda en versiones anteriores.</span> <button class="ghost danger" id="admDelOk">Sí</button><button class="ghost" id="admDelNo">No</button>`;
@@ -875,13 +879,14 @@ function admDrawTable(){
   const idxs=A.rows.map((r,i)=>i).filter(i=>{ const r=A.rows[i]; return !ql || norm(r.c).includes(q) || (r.t||"").toLowerCase().includes(ql); });
   const tipos=[...new Set(A.rows.map(r=>r.t).filter(Boolean))];
   $("admTable").innerHTML = `<datalist id="dlTiposEl">${tipos.map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
-  <table class="num"><tr><th>Tipo de elemento</th><th>Código</th><th class="r">Cant.</th><th class="r">Kg estructura</th><th class="r">Kg revestimiento</th><th class="r">Kg total</th><th>Cambio</th><th></th></tr>
-  ${idxs.map(i=>{ const r=A.rows[i], o=A.orig.get(norm(r.c)); const st_=!r.c?"":!o?`<span class="chip good">Nuevo</span>`:(o.t!==r.t||+o.q!==+r.q||Math.abs(o.a-r.a)>0.005||Math.abs(o.f-r.f)>0.005||o.c!==r.c)?`<span class="chip warn">Modificado</span>`:"";
+  <table class="num"><tr><th>Tipo de elemento</th><th>Código</th><th class="r">Cant.</th><th class="r">Kg estructura</th><th class="r">Kg revestimiento</th><th class="r">m² revestimiento</th><th class="r">Kg total</th><th>Cambio</th><th></th></tr>
+  ${idxs.map(i=>{ const r=A.rows[i], o=A.orig.get(norm(r.c)); const st_=!r.c?"":!o?`<span class="chip good">Nuevo</span>`:(o.t!==r.t||+o.q!==+r.q||Math.abs(o.a-r.a)>0.005||Math.abs(o.f-r.f)>0.005||Math.abs((+o.m||0)-(+r.m||0))>0.0005||o.c!==r.c)?`<span class="chip warn">Modificado</span>`:"";
     return `<tr><td><input type="text" list="dlTiposEl" data-i="${i}" data-k="t" value="${esc(r.t)}" style="width:11em" aria-label="Tipo"></td>
     <td><input type="text" class="mono" data-i="${i}" data-k="c" value="${esc(r.c)}" style="width:8em" aria-label="Código"></td>
     <td class="r"><input type="number" min="1" step="1" data-i="${i}" data-k="q" value="${r.q}" style="width:4.2em" aria-label="Cantidad"></td>
     <td class="r"><input type="number" min="0" step="0.01" data-i="${i}" data-k="a" value="${r.a}" style="width:6em" aria-label="Kg estructura"></td>
     <td class="r"><input type="number" min="0" step="0.01" data-i="${i}" data-k="f" value="${r.f}" style="width:6em" aria-label="Kg revestimiento"></td>
+    <td class="r"><input type="number" min="0" step="0.001" data-i="${i}" data-k="m" value="${+r.m||""}" placeholder="${+r.f>0?"falta":""}" style="width:6em" aria-label="m² de revestimiento por unidad"></td>
     <td class="r" data-tot="${i}">${nf1.format((+r.q||0)*((+r.a||0)+(+r.f||0)))}</td><td data-chg="${i}">${st_}${noForrado(r.c)&&+r.f>0?` <span class="chip neutral" title="Este revestimiento no se cuenta: no se hace en taller">Revestimiento no se cuenta</span>`:""}</td>
     <td><button class="ghost danger" data-rm="${i}" aria-label="Quitar ${esc(r.c)}" title="${used.has(norm(r.c))?"Este elemento está en fichas registradas":""}">✕</button></td></tr>`; }).join("")}
   </table>${!idxs.length?`<div class="empty small">${A.rows.length?"Ningún elemento coincide con el filtro.":"Sin elementos. Agrega filas o importa el Excel."}</div>`:""}`;
@@ -907,10 +912,10 @@ async function admSave(){
   const b=$("admSave"); b.disabled=true; b.innerHTML=`<span class="spin"></span> Guardando`;
   try{
     await admBackup(A.tipo);
-    const doc={nombre:A.nombre, items:A.rows.map(r=>({t:String(r.t||"").trim(), c:String(r.c).trim(), q:Math.max(1,Math.round(+r.q||1)), a:+(+r.a||0).toFixed(2), f:+(+r.f||0).toFixed(2)})), pilA:+A.pilA, pilF:+A.pilF, ref:A.ref||"", actualizado:Date.now(), version:((CATMETA[A.tipo]||{}).version||0)+1};
+    const doc={nombre:A.nombre, items:A.rows.map(r=>({t:String(r.t||"").trim(), c:String(r.c).trim(), q:Math.max(1,Math.round(+r.q||1)), a:+(+r.a||0).toFixed(2), f:+(+r.f||0).toFixed(2), m:+(+r.m||0).toFixed(3)})), pilA:+A.pilA, pilF:+A.pilF, ref:A.ref||"", actualizado:Date.now(), version:((CATMETA[A.tipo]||{}).version||0)+1};
     /* Primera vez que se guarda en la base: los demás catálogos de las planillas piloto también se guardan, para no perderlos */
     const db = st.db; const existing = await db.collection("catalogos").get();
-    if(existing.empty){ for(const t of tiposList()) if(t!==A.tipo) await db.collection("catalogos").doc(t).set({nombre:catName(t), items:RAWCAT[t].map(([tt,c,q,a,f])=>({t:tt,c,q,a,f})), pilA:PILOTO[t].a, pilF:PILOTO[t].f, ref:PILOTO[t].ref||"", actualizado:Date.now(), version:1}); }
+    if(existing.empty){ for(const t of tiposList()) if(t!==A.tipo) await db.collection("catalogos").doc(t).set({nombre:catName(t), items:RAWCAT[t].map(([tt,c,q,a,f,m])=>({t:tt,c,q,a,f,m:+m||0})), pilA:PILOTO[t].a, pilF:PILOTO[t].f, ref:PILOTO[t].ref||"", actualizado:Date.now(), version:1}); }
     await db.collection("catalogos").doc(A.tipo).set(doc);
     A.dirty=false; A.isNew=false; toast("Catálogo guardado"); admLoad(A.tipo); st.adm.note=""; renderAdmin();
   }catch(e){ b.disabled=false; b.textContent="Guardar catálogo"; toast(e && e.code==="permission_denied" ? "No tienes permiso de administrador para guardar" : "No se pudo guardar: "+(e.message||e.code)); }
@@ -940,12 +945,12 @@ async function admImport(file){
       const cT=hdr.findIndex(v=>v==="tipo"), cE=hdr.indexOf("elemento"), cQ=hdr.findIndex(v=>v.startsWith("cantidad"));
       const kgCols=hdr.map((v,i)=>/^kgs?\b/.test(v)&&!/total/.test(v)?i:-1).filter(i=>i>cQ);
       let cA=kgCols.find(i=>/METALCON|ACERO|ESTRUCT/.test(up[i])); if(cA==null) cA=kgCols[0];
-      const cF=kgCols.filter(i=>i!==cA);
+      const cF=kgCols.filter(i=>i!==cA), cM=hdr.findIndex(v=>/m2|m²/.test(v));
       if(cE<0||cQ<0||cA==null){ continue; }
       const val=v=>{ const n=typeof v==="number"?v:parseFloat(String(v??"").replace(",",".")); return isFinite(n)?n:0; };
       rows=[]; for(let r=h+1;r<g.length;r++){ const row=g[r]||[]; const code=String(row[cE]??"").trim(); const tipo=String(cT>=0?row[cT]??"":"").trim();
         if(!code || /^total/i.test(tipo) || /^total/i.test(code)) continue; if(typeof row[cQ]!=="number" && isNaN(parseFloat(row[cQ]))) continue;
-        rows.push({t:tipo,c:code,q:Math.max(1,Math.round(val(row[cQ]))||1),a:+val(row[cA]).toFixed(2),f:+cF.reduce((s,i)=>s+val(row[i]),0).toFixed(2)}); }
+        rows.push({t:tipo,c:code,q:Math.max(1,Math.round(val(row[cQ]))||1),a:+val(row[cA]).toFixed(2),f:+cF.reduce((s,i)=>s+val(row[i]),0).toFixed(2)}); const lr=rows[rows.length-1]; lr.m = lr.f>0 && cM>=0 ? +val(row[cM]).toFixed(3) : 0; }
       /* Rendimiento: hoja Produccion, tabla Acción / Factor (kg/h) */
       const ps=wb.SheetNames.find(n=>/produc/i.test(n)); if(ps){ const pg=XLSX.utils.sheet_to_json(wb.Sheets[ps],{header:1,defval:null,raw:true}); let hc=-1,hr=-1;
         pg.some((row,r)=>(row||[]).some((v,c)=>{ if(/factor\s*\(kg\/h\)/i.test(String(v||""))){ hr=r; hc=c; return true; } return false; }));
@@ -955,7 +960,7 @@ async function admImport(file){
     if(!rows||!rows.length){ A.note=`No encontré la tabla de elementos en "${esc(file.name)}". Debe tener columnas Tipo, Elemento, Cantidad y Kgs como la hoja BD de las planillas de rendimiento.`; A.noteCls="err"; renderAdmin(); return; }
     const dups=new Map(); const clean=[]; for(const r of rows){ const k=norm(r.c); if(dups.has(k)){ dups.get(k).n++; continue; } dups.set(k,{n:1}); clean.push(r); }
     const old=new Map(A.rows.map(r=>[norm(r.c),r])); const now=new Set(clean.map(r=>norm(r.c)));
-    let nNew=0,nChg=0; for(const r of clean){ const o=old.get(norm(r.c)); if(!o) nNew++; else if(o.t!==r.t||+o.q!==r.q||Math.abs(o.a-r.a)>0.005||Math.abs(o.f-r.f)>0.005) nChg++; }
+    let nNew=0,nChg=0; for(const r of clean){ const o=old.get(norm(r.c)); if(!o) nNew++; else if(o.t!==r.t||+o.q!==r.q||Math.abs(o.a-r.a)>0.005||Math.abs(o.f-r.f)>0.005||Math.abs((+o.m||0)-(+r.m||0))>0.0005) nChg++; }
     const gone=A.rows.filter(r=>!now.has(norm(r.c))); const used=admUsage(A.tipo); const goneUsed=gone.filter(r=>used.has(norm(r.c)));
     const nDup=[...dups.values()].filter(x=>x.n>1).length;
     A.rows=clean; A.dirty=true; if(pil){ A.pilA=pil.a; A.pilF=pil.f; }
@@ -981,20 +986,20 @@ function computeRend(){
   for(const fi of fichas) for(const it of (fi.items||[])){
     const c=casas.get(itemCasa(fi,it)); if(!c) continue; const m=match(c.tipo,it); if(!m || m.a+m.f<=0) continue;
     const k=c.id+"|"+m.code, p=seen.get(k)||{a:0,o:0}; seen.set(k,p); const q=Math.max(1,Number(it.q)||1);
-    let a=0,f=0;
+    let a=0,f=0,fm=0;
     if(it.e){ const ok=Math.min(q,m.q-p.a); if(ok>0){ p.a+=ok; a=ok*m.a; } }
-    if(it.o && m.f>0){ const ok=Math.min(q,m.q-p.o); if(ok>0){ p.o+=ok; f=ok*m.f; } }
+    if(it.o && m.f>0){ const ok=Math.min(q,m.q-p.o); if(ok>0){ p.o+=ok; f=ok*m.f; fm=ok*m.m; } }
     if(a+f<=0) continue;
-    (days.get(fi.fecha)||days.set(fi.fecha,[]).get(fi.fecha)).push({g:grupoDe(m.tipo),a,f});
+    (days.get(fi.fecha)||days.set(fi.fecha,[]).get(fi.fecha)).push({g:grupoDe(m.tipo),a,f,fm});
   }
-  const G=new Map(); const get=g=>G.get(g)||G.set(g,{g,a:0,f:0,hA:0,hF:0,dias:new Set()}).get(g);
+  const G=new Map(); const get=g=>G.get(g)||G.set(g,{g,a:0,f:0,fm:0,hA:0,hF:0,dias:new Set()}).get(g);
   for(const [fecha,list] of days){ const den=list.reduce((s,x)=>s+x.a+w*x.f,0); if(den<=0) continue;
-    for(const x of list){ const r=get(x.g); r.a+=x.a; r.f+=x.f; r.hA+=hhDia*x.a/den; r.hF+=hhDia*w*x.f/den; r.dias.add(fecha); } }
+    for(const x of list){ const r=get(x.g); r.a+=x.a; r.f+=x.f; r.fm+=x.fm; r.hA+=hhDia*x.a/den; r.hF+=hhDia*w*x.f/den; r.dias.add(fecha); } }
   /* kg por casa de cada grupo, según el catálogo de cada tipo de casa en uso */
   const tipos=[...new Set(st.casas.map(c=>c.tipo))].filter(t=>CAT[t]);
   const catKg={}; for(const t of tipos){ catKg[t]={}; for(const [tipo,code,q,a,f] of CAT[t]){ if(a+f<=0) continue; const g=grupoDe(tipo); const o=catKg[t][g]||(catKg[t][g]={a:0,f:0}); o.a+=q*a; o.f+=q*f; } }
   const allG=new Set([...G.keys(), ...tipos.flatMap(t=>Object.keys(catKg[t]))]);
-  const rows=[...allG].map(g=>{ const r=G.get(g)||{g,a:0,f:0,hA:0,hF:0,dias:new Set()}; return {...r, nd:r.dias.size, kphA:r.hA>0?r.a/r.hA:null, kphF:r.hF>0?r.f/r.hF:null}; })
+  const rows=[...allG].map(g=>{ const r=G.get(g)||{g,a:0,f:0,fm:0,hA:0,hF:0,dias:new Set()}; return {...r, nd:r.dias.size, kphA:r.hA>0?r.a/r.hA:null, kphF:r.hF>0?r.f/r.hF:null, mphF:r.hF>0?r.fm/r.hF:null}; })
     .sort((x,y)=>{ const ix=GRUPOS.indexOf(x.g), iy=GRUPOS.indexOf(y.g); return (ix<0?99:ix)-(iy<0?99:iy) || x.g.localeCompare(y.g); });
   /* HH estimadas para una casa completa: kg del catálogo ÷ kg/HH real (si no hay dato, rendimiento piloto ÷ personas) */
   const est=(t,r)=>{ const k=catKg[t][r.g]; if(!k) return null; const pil=PILOTO[t]||{a:60,f:60};
@@ -1011,7 +1016,7 @@ function renderRend(){
   const main=R.rows.filter(r=>GRUPOS.includes(r.g)), otros=R.rows.filter(r=>!GRUPOS.includes(r.g));
   const t0=R.tipos[0];
   const tabla=rows=>`<div class="tablewrap"><table class="num"><tr><th>Elemento</th><th class="r">Días con producción</th><th class="r">Kg estructura</th><th class="r">HH estructura</th><th class="r">Kg/HH estructura</th><th class="r">m² revestimiento</th><th class="r">HH revestimiento</th><th class="r">m²/HH revestimiento</th><th class="r">HH totales usadas</th>${R.tipos.map(t=>`<th class="r">HH por casa ${esc(catName(t))}</th><th class="r">Días de equipo por casa</th>`).join("")}</tr>
-    ${rows.map(r=>`<tr><td><b>${esc(r.g)}</b></td><td class="r">${r.nd||"—"}</td><td class="r">${kg(r.a)}</td><td class="r">${hh(r.hA)}</td><td class="r">${kph(r.kphA)}</td><td class="r">${r.f>0?fm2(r.f):"—"}</td><td class="r">${r.hF>0?hh(r.hF):"—"}</td><td class="r">${r.kphF==null?`<span class="muted">—</span>`:nf2.format(m2(r.kphF))}</td><td class="r"><b>${hh(r.hA+r.hF)}</b></td>
+    ${rows.map(r=>`<tr><td><b>${esc(r.g)}</b></td><td class="r">${r.nd||"—"}</td><td class="r">${kg(r.a)}</td><td class="r">${hh(r.hA)}</td><td class="r">${kph(r.kphA)}</td><td class="r">${r.f>0?fm2(r.fm):"—"}</td><td class="r">${r.hF>0?hh(r.hF):"—"}</td><td class="r">${r.mphF==null?`<span class="muted">—</span>`:nf2.format(r.mphF)}</td><td class="r"><b>${hh(r.hA+r.hF)}</b></td>
       ${R.tipos.map(t=>{ const e=R.est(t,r); return e?`<td class="r"><b>${hh(e.h)}</b>${e.real?"":` <span class="chip neutral" title="Sin producción registrada: estimado con el rendimiento piloto">piloto</span>`}</td><td class="r">${nf1.format(e.h/R.hhDia)}</td>`:`<td class="r muted">—</td><td class="r muted">—</td>`; }).join("")}</tr>`).join("")}
   </table></div>`;
   const tot=main.reduce((s,r)=>s+r.hA+r.hF,0)+otros.reduce((s,r)=>s+r.hA+r.hF,0);
@@ -1030,7 +1035,7 @@ function renderRend(){
 /* ---------- Vista: Producción diaria global (todas las casas) ---------- */
 function computeGlobal(){
   const Rs = st.casas.map(c=>computeCasa(c)); const days=new Map();
-  for(const R of Rs) for(const d of R.daily){ const g=days.get(d.fecha)||{fecha:d.fecha,a:0,f:0,casas:[]}; g.a+=d.a; g.f+=d.f; if(d.a+d.f>0) g.casas.push({nombre:R.casa.nombre,a:d.a,f:d.f}); days.set(d.fecha,g); }
+  for(const R of Rs) for(const d of R.daily){ const g=days.get(d.fecha)||{fecha:d.fecha,a:0,f:0,fm:0,casas:[]}; g.a+=d.a; g.f+=d.f; g.fm+=d.fm||0; if(d.a+d.f>0) g.casas.push({nombre:R.casa.nombre,a:d.a,f:d.f}); days.set(d.fecha,g); }
   const hd=Number(st.cfg.horasDia)||7;
   const daily=[...days.values()].sort((x,y)=>x.fecha<y.fecha?-1:1).map(d=>({...d,kgh:(d.a+d.f)/hd}));
   return {Rs,daily,hd};
@@ -1051,7 +1056,7 @@ function chartGlobal(box, G, n){
     if(i%step===0||i===ds.length-1){ const dd=D(d.fecha); g+=`<text x="${X(i)}" y="${H-10}" text-anchor="middle">${dd.getUTCDate()} ${MES[dd.getUTCMonth()]}</text>`; } });
   g+=`<line x1="${L}" x2="${W-Rm}" y1="${Y(avg)}" y2="${Y(avg)}" stroke="var(--plan)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="${W-Rm}" y="${Y(avg)-5}" text-anchor="end">Promedio ${kg(avg)} kg/día</text>`;
   box.innerHTML=svgEl(W,H,g)+`<div class="legend"><span><i class="sq" style="background:var(--armado)"></i>Estructura (armado)</span><span><i class="sq" style="background:var(--forrado)"></i>Revestimiento (OSB + EPS)</span><span><i style="background:repeating-linear-gradient(90deg,var(--plan) 0 5px,transparent 5px 8px)"></i>Promedio del período</span></div>`;
-  attachTip(box, ds.map((d,i)=>({x:X(i), html:`<b>${fmtD(d.fecha)}</b> · ${kg(d.a+d.f)} kg · ${nf1.format(d.kgh)} kg/h<br>Estructura ${kg(d.a)} kg · Revestimiento ${fm2(d.f)} m² (${kg(d.f)} kg)${d.casas.map(c=>`<br>${esc(c.nombre)}: ${kg(c.a+c.f)} kg`).join("")}`})));
+  attachTip(box, ds.map((d,i)=>({x:X(i), html:`<b>${fmtD(d.fecha)}</b> · ${kg(d.a+d.f)} kg · ${nf1.format(d.kgh)} kg/h<br>Estructura ${kg(d.a)} kg · Revestimiento ${fm2(d.fm)} m² (${kg(d.f)} kg)${d.casas.map(c=>`<br>${esc(c.nombre)}: ${kg(c.a+c.f)} kg`).join("")}`})));
 }
 function renderProduccion(){
   const el=$("v-prod");
@@ -1063,29 +1068,30 @@ function renderProduccion(){
   /* Horas del día repartidas entre armado y revestimiento (el revestimiento pesa 1+factor), como en el resto del programa */
   const wF=1+(Number(st.cfg.factorForrado)||0), hrs=d=>{ const den=d.a+wF*d.f; return den>0? {hA:G.hd*d.a/den, hF:G.hd*wF*d.f/den} : {hA:0,hF:0}; };
   const hA=per.reduce((s,d)=>s+hrs(d).hA,0), hF=per.reduce((s,d)=>s+hrs(d).hF,0);
-  const totA=G.Rs.reduce((s,R)=>s+R.doneA,0), totF=G.Rs.reduce((s,R)=>s+R.doneF,0);
+  const totA=G.Rs.reduce((s,R)=>s+R.doneA,0), totF=G.Rs.reduce((s,R)=>s+R.doneF,0), totM=G.Rs.reduce((s,R)=>s+R.doneM,0);
+  const sumM=per.reduce((s,d)=>s+(d.fm||0),0);
   const mes=todayS().slice(0,7), dMes=ds.filter(d=>d.fecha.startsWith(mes)), mesDias=dMes.length;
-  const mesA=dMes.reduce((s,d)=>s+d.a,0), mesF=dMes.reduce((s,d)=>s+d.f,0);
+  const mesA=dMes.reduce((s,d)=>s+d.a,0), mesF=dMes.reduce((s,d)=>s+d.f,0), mesM=dMes.reduce((s,d)=>s+(d.fm||0),0);
   const nDias = per.length<n ? `solo hay ${per.length} día${per.length===1?"":"s"} con ficha` : `${per.length} días con ficha`;
   const fila=(nombre,color,k,sum,h,mesK,tot)=>{
-    const enM2=k==="f", u=enM2?"m²":"kg", cv=v=>enM2? m2(v):v, fmt=v=>enM2? nf1.format(m2(v)) : kg(v);
+    const enM2=k==="fm", u=enM2?"m²":"kg", fmt=v=>enM2? nf1.format(v||0) : kg(v);
     const ult=last? last[k]:null, ant=prev? prev[k]:null, delta = ult!=null&&ant!=null? ult-ant : null, prom=per.length? sum/per.length:0;
     return `<div style="display:grid;gap:8px"><h2 class="row" style="gap:8px"><i class="sq" style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${color}"></i>${nombre}</h2>
     <div class="tiles">
       <div class="tile"><span class="lbl">Último día${last?` · ${fmtD(last.fecha)}`:""}</span><span class="v num">${ult!=null?fmt(ult):"—"} <small>${u}</small></span><span class="s num">${delta!=null?`${delta>=0?"+":"−"}${fmt(Math.abs(delta))} ${u} respecto del día anterior`:last?"":"Sin fichas"}</span></div>
-      <div class="tile"><span class="lbl">Promedio diario · últimos ${n} días</span><span class="v num">${fmt(prom)} <small>${u}/día</small></span><span class="s num">${h>0?`${nf1.format(cv(sum)/h)} ${u}/h · `:""}${nDias}</span></div>
+      <div class="tile"><span class="lbl">Promedio diario · últimos ${n} días</span><span class="v num">${fmt(prom)} <small>${u}/día</small></span><span class="s num">${h>0?`${nf1.format(sum/h)} ${u}/h · `:""}${nDias}</span></div>
       <div class="tile"><span class="lbl">Este mes</span><span class="v num">${fmt(mesK)} <small>${u}</small></span><span class="s num">${mesDias} día${mesDias===1?"":"s"} con ficha</span></div>
-      <div class="tile"><span class="lbl">Acumulado total</span><span class="v num">${fmt(tot)} <small>${u}</small></span><span class="s">${enM2?`${kg(tot)} kg · `:""}${G.Rs.length} casa${G.Rs.length===1?"":"s"} · <a href="#casas">ver avance por casa</a></span></div>
+      <div class="tile"><span class="lbl">Acumulado total</span><span class="v num">${fmt(tot)} <small>${u}</small></span><span class="s">${enM2?`${kg(totF)} kg · `:""}${G.Rs.length} casa${G.Rs.length===1?"":"s"} · <a href="#casas">ver avance por casa</a></span></div>
     </div></div>`; };
   el.innerHTML=`
   <div class="headline"><h1>Producción diaria del taller</h1><span class="meta">Todas las casas · ${ds.length} día${ds.length===1?"":"s"} con ficha${last?` · última ficha ${fmtDY(last.fecha)}`:""}</span></div>
   ${fila("Armado (estructura)","var(--armado)","a",sumA,hA,mesA,totA)}
-  ${fila("Revestimiento (OSB + EPS)","var(--forrado)","f",sumF,hF,mesF,totF)}
+  ${fila("Revestimiento (OSB + EPS)","var(--forrado)","fm",sumM,hF,mesM,totM)}
   <div class="panel"><div class="row"><h2 class="grow">Kg fabricados por día</h2><div class="row small" role="group" aria-label="Período" style="gap:4px"><span class="lbl">Últimos</span>${[5,10,20,30].map(v=>`<button class="${v===n?"pri":"ghost"} small" data-rango="${v}" aria-pressed="${v===n}">${v} días</button>`).join("")}</div></div><div class="chart" id="chGlobal"></div></div>
   <div class="panel" style="display:grid;gap:10px"><h2>Detalle diario</h2>
     ${per.length?`<div class="tablewrap"><table class="num"><tr><th>Fecha</th><th class="r">Estructura kg</th><th class="r">Revestimiento m²</th><th class="r">Total kg</th><th class="r">kg/h</th><th>Casas</th></tr>
-    ${[...per].reverse().map(d=>`<tr><td>${fmtD(d.fecha)}</td><td class="r">${kg(d.a)}</td><td class="r">${fm2(d.f)}</td><td class="r"><b>${kg(d.a+d.f)}</b></td><td class="r">${nf1.format(d.kgh)}</td><td class="small">${d.casas.map(c=>`${esc(c.nombre)} <span class="muted">${kg(c.a+c.f)}</span>`).join(" · ")}</td></tr>`).join("")}
-    <tr><td><b>Período</b></td><td class="r"><b>${kg(sumA)}</b></td><td class="r"><b>${fm2(sumF)}</b></td><td class="r"><b>${kg(sumA+sumF)}</b></td><td class="r"><b>${nf1.format(avg/G.hd)}</b></td><td></td></tr></table></div>`:`<div class="empty small">Aún no hay fichas registradas para esta casa.</div>`}
+    ${[...per].reverse().map(d=>`<tr><td>${fmtD(d.fecha)}</td><td class="r">${kg(d.a)}</td><td class="r">${fm2(d.fm)}</td><td class="r"><b>${kg(d.a+d.f)}</b></td><td class="r">${nf1.format(d.kgh)}</td><td class="small">${d.casas.map(c=>`${esc(c.nombre)} <span class="muted">${kg(c.a+c.f)}</span>`).join(" · ")}</td></tr>`).join("")}
+    <tr><td><b>Período</b></td><td class="r"><b>${kg(sumA)}</b></td><td class="r"><b>${fm2(per.reduce((s,d)=>s+(d.fm||0),0))}</b></td><td class="r"><b>${kg(sumA+sumF)}</b></td><td class="r"><b>${nf1.format(avg/G.hd)}</b></td><td></td></tr></table></div>`:`<div class="empty small">Aún no hay fichas registradas para esta casa.</div>`}
   </div>`;
   chartGlobal($("chGlobal"),G,n);
   el.querySelectorAll("[data-rango]").forEach(b=>b.onclick=()=>{ st.rango=+b.dataset.rango; try{ localStorage.setItem("dmia.rango",st.rango); }catch(e){} renderProduccion(); });
@@ -1166,7 +1172,7 @@ render();
     const j = await r.json();
     const cats = j.catalogos||{};
     if(Object.keys(cats).length){ const cat={}, pil={}, meta={};
-      for(const [id,x] of Object.entries(cats)){ cat[id]=(x.items||[]).map(r=>[r.t||"",r.c,Math.max(1,+r.q||1),+r.a||0,+r.f||0]); pil[id]={a:+x.pilA||60,f:+x.pilF||60,ref:x.ref||""}; meta[id]={nombre:x.nombre||id}; }
+      for(const [id,x] of Object.entries(cats)){ cat[id]=(x.items||[]).map(r=>[r.t||"",r.c,Math.max(1,+r.q||1),+r.a||0,+r.f||0,+r.m||0]); pil[id]={a:+x.pilA||60,f:+x.pilF||60,ref:x.ref||""}; meta[id]={nombre:x.nombre||id}; }
       RAWCAT=cat; PILOTO=pil; CATMETA=meta; }
     st.cfg={...DEF_CFG,...(j.config||{})}; applyCfg();
     st.casas=(j.casas||[]).sort((a,b)=>(a.creado||0)-(b.creado||0)); st.fichas=j.fichas||[];
