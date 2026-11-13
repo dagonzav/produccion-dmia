@@ -1061,26 +1061,32 @@ function chartGlobal(box, G, n){
 function chartTend(box, G, n){
   const ds=G.daily.slice(-n); if(!ds.length){ box.innerHTML=`<div class="empty small">Aún no hay fichas registradas.</div>`; return; }
   const W=900,H=260,L=48,Rm=12,T=14,B=30, iw=W-L-Rm, ih=H-T-B, N=ds.length;
-  /* Tendencia lineal (mínimos cuadrados) sobre los días del período */
-  const reg=k=>{ if(N<2) return null; const mx=(N-1)/2, my=ds.reduce((s,d)=>s+d[k],0)/N; let sxy=0,sxx=0; ds.forEach((d,i)=>{ sxy+=(i-mx)*(d[k]-my); sxx+=(i-mx)*(i-mx); }); const b=sxx?sxy/sxx:0; return {b, y:i=>my+b*(i-mx)}; };
-  const rA=reg("a"), rF=reg("f");
-  const vals=ds.flatMap(d=>[d.a,d.f]).concat(rA?[rA.y(0),rA.y(N-1)]:[], rF?[rF.y(0),rF.y(N-1)]:[]);
-  const max=Math.max(1,...vals)*1.12;
+  /* Tendencia = promedio móvil centrado de 3 días con ficha (en los extremos, con los días disponibles), dibujado como curva suave */
+  const VW=3, half=Math.floor(VW/2);
+  const mov=k=>ds.map((d,i)=>{ const w=ds.slice(Math.max(0,i-half), Math.min(N,i+half+1)); return w.reduce((s,x)=>s+x[k],0)/w.length; });
+  const mA=mov("a"), mF=mov("f");
+  const max=Math.max(1,...ds.flatMap(d=>[d.a,d.f]))*1.12;
   const p=Math.pow(10,Math.floor(Math.log10(max/4))); let nice=10*p; for(const m of [1,2,2.5,5,10]) if(m*p*4>=max){ nice=m*p; break; }
   const top=nice*Math.ceil(max/nice), Y=v=>T+ih*(1-Math.max(0,v)/top), X=i=>N===1? L+iw/2 : L+iw*i/(N-1);
+  /* Curva suave por los puntos (Catmull-Rom → Bézier), sin pasarse de los valores vecinos */
+  const smooth=pts=>{ if(pts.length<2) return ""; let d=`M${pts[0][0]},${pts[0][1]}`;
+    for(let i=0;i<pts.length-1;i++){ const p0=pts[Math.max(0,i-1)], p1=pts[i], p2=pts[i+1], p3=pts[Math.min(pts.length-1,i+2)];
+      const lo=Math.min(p1[1],p2[1]), hi=Math.max(p1[1],p2[1]), cl=v=>Math.min(hi,Math.max(lo,v));
+      d+=` C${p1[0]+(p2[0]-p0[0])/6},${cl(p1[1]+(p2[1]-p0[1])/6)} ${p2[0]-(p3[0]-p1[0])/6},${cl(p2[1]-(p3[1]-p1[1])/6)} ${p2[0]},${p2[1]}`; }
+    return d; };
   let g=""; for(let v=0; v<=top+1e-6; v+=nice) g+=`<line x1="${L}" x2="${W-Rm}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${kg(v)}</text>`;
   const step=Math.max(1,Math.ceil(N/12));
   ds.forEach((d,i)=>{ if(i%step===0||i===N-1){ const dd=D(d.fecha); g+=`<text x="${X(i)}" y="${H-10}" text-anchor="middle">${dd.getUTCDate()} ${MES[dd.getUTCMonth()]}</text>`; } });
-  const serie=(k,col,r)=>{ let o=`<polyline points="${ds.map((d,i)=>`${X(i)},${Y(d[k])}`).join(" ")}" fill="none" stroke="${col}" stroke-width="2.5" stroke-linejoin="round"/>`;
-    o+=ds.map((d,i)=>`<circle cx="${X(i)}" cy="${Y(d[k])}" r="3.5" fill="${col}" stroke="var(--panel)" stroke-width="1.5"/>`).join("");
-    if(r) o+=`<line x1="${X(0)}" y1="${Y(r.y(0))}" x2="${X(N-1)}" y2="${Y(r.y(N-1))}" stroke="${col}" stroke-width="2" stroke-dasharray="6 5" opacity=".9"/>`;
+  const serie=(k,col,m)=>{ let o=`<polyline points="${ds.map((d,i)=>`${X(i)},${Y(d[k])}`).join(" ")}" fill="none" stroke="${col}" stroke-width="1.5" stroke-linejoin="round" opacity=".45"/>`;
+    o+=ds.map((d,i)=>`<circle cx="${X(i)}" cy="${Y(d[k])}" r="3" fill="${col}" stroke="var(--panel)" stroke-width="1.5" opacity=".7"/>`).join("");
+    if(N>1) o+=`<path d="${smooth(m.map((v,i)=>[X(i),Y(v)]))}" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round"/>`;
     return o; };
-  g+=serie("a","var(--armado)",rA)+serie("f","var(--forrado)",rF);
+  g+=serie("a","var(--armado)",mA)+serie("f","var(--forrado)",mF);
   g+=`<line class="cross" x1="0" x2="0" y1="${T}" y2="${T+ih}" stroke="var(--ink-3)" stroke-width="1" opacity="0"/>`;
-  const tx=(r)=> r? `${r.b>=0?"+":"−"}${kg(Math.abs(r.b))} kg/día` : "—";
-  box.innerHTML=svgEl(W,H,g)+`<div class="legend"><span><i style="background:var(--armado)"></i>Armado</span><span><i style="background:var(--forrado)"></i>Revestimiento</span><span><i style="background:repeating-linear-gradient(90deg,var(--ink-3) 0 6px,transparent 6px 10px)"></i>Línea de tendencia</span></div>`
-    +`<p class="small muted" style="margin:6px 0 0">Tendencia en el período: armado ${tx(rA)} · revestimiento ${tx(rF)} por cada día con ficha.</p>`;
-  attachTip(box, ds.map((d,i)=>({x:X(i), html:`<b>${fmtD(d.fecha)}</b><br>Armado ${kg(d.a)} kg${rA?` <span style="opacity:.75">(tend. ${kg(Math.max(0,rA.y(i)))})</span>`:""}<br>Revestimiento ${kg(d.f)} kg${rF?` <span style="opacity:.75">(tend. ${kg(Math.max(0,rF.y(i)))})</span>`:""}`})));
+  const avA=ds.reduce((s,d)=>s+d.a,0)/N, avF=ds.reduce((s,d)=>s+d.f,0)/N;
+  box.innerHTML=svgEl(W,H,g)+`<div class="legend"><span><i style="background:var(--armado);height:4px"></i>Armado, promedio móvil</span><span><i style="background:var(--forrado);height:4px"></i>Revestimiento, promedio móvil</span><span><i style="background:var(--ink-3);opacity:.45;height:2px"></i>Valor de cada día</span></div>`
+    +`<p class="small muted" style="margin:6px 0 0">La curva es el promedio de ${VW} días con ficha (el día, el anterior y el siguiente). Promedio del período: armado ${kg(avA)} kg/día · revestimiento ${kg(avF)} kg/día.</p>`;
+  attachTip(box, ds.map((d,i)=>({x:X(i), html:`<b>${fmtD(d.fecha)}</b><br>Armado ${kg(d.a)} kg · promedio ${kg(mA[i])}<br>Revestimiento ${kg(d.f)} kg · promedio ${kg(mF[i])}`})));
 }
 function renderProduccion(){
   const el=$("v-prod");
