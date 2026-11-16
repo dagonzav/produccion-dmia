@@ -1088,9 +1088,9 @@ function chartGlobal(box, G, n){
 function chartTend(box, G, n){
   const ds=G.daily.slice(-n); if(!ds.length){ box.innerHTML=`<div class="empty small">Aún no hay fichas registradas.</div>`; return; }
   const W=900,H=260,L=48,Rm=12,T=14,B=30, iw=W-L-Rm, ih=H-T-B, N=ds.length;
-  /* Tendencia = promedio móvil centrado de 3 días con ficha (en los extremos, con los días disponibles), dibujado como curva suave */
-  const VW=3, half=Math.floor(VW/2);
-  const mov=k=>ds.map((d,i)=>{ const w=ds.slice(Math.max(0,i-half), Math.min(N,i+half+1)); return w.reduce((s,x)=>s+x[k],0)/w.length; });
+  /* Tendencia = promedio de los últimos 5 días con ficha (el día y los 4 anteriores), calculado sobre toda la historia para que el inicio del período también tenga sus 5 días; dibujado como curva suave */
+  const VW=5, all=G.daily, off=all.length-N;
+  const mov=k=>ds.map((d,i)=>{ const j=off+i, w=all.slice(Math.max(0,j-VW+1), j+1); return w.reduce((s,x)=>s+x[k],0)/w.length; });
   const mA=mov("a"), mF=mov("f");
   const max=Math.max(1,...ds.flatMap(d=>[d.a,d.f]))*1.12;
   const p=Math.pow(10,Math.floor(Math.log10(max/4))); let nice=10*p; for(const m of [1,2,2.5,5,10]) if(m*p*4>=max){ nice=m*p; break; }
@@ -1111,9 +1111,9 @@ function chartTend(box, G, n){
   g+=serie("a","var(--armado)",mA)+serie("f","var(--forrado)",mF);
   g+=`<line class="cross" x1="0" x2="0" y1="${T}" y2="${T+ih}" stroke="var(--ink-3)" stroke-width="1" opacity="0"/>`;
   const avA=ds.reduce((s,d)=>s+d.a,0)/N, avF=ds.reduce((s,d)=>s+d.f,0)/N;
-  box.innerHTML=svgEl(W,H,g)+`<div class="legend"><span><i style="background:var(--armado);height:4px"></i>Armado, promedio móvil</span><span><i style="background:var(--forrado);height:4px"></i>Revestimiento, promedio móvil</span><span><i style="background:var(--ink-3);opacity:.45;height:2px"></i>Valor de cada día</span></div>`
-    +`<p class="small muted" style="margin:6px 0 0">La curva es el promedio de ${VW} días con ficha (el día, el anterior y el siguiente). Promedio del período: armado ${kg(avA)} kg/día · revestimiento ${kg(avF)} kg/día.</p>`;
-  attachTip(box, ds.map((d,i)=>({x:X(i), html:`<b>${fmtD(d.fecha)}</b><br>Armado ${kg(d.a)} kg · promedio ${kg(mA[i])}<br>Revestimiento ${kg(d.f)} kg · promedio ${kg(mF[i])}`})));
+  box.innerHTML=svgEl(W,H,g)+`<div class="legend"><span><i style="background:var(--armado);height:4px"></i>Armado, promedio últimos 5 días</span><span><i style="background:var(--forrado);height:4px"></i>Revestimiento, promedio últimos 5 días</span><span><i style="background:var(--ink-3);opacity:.45;height:2px"></i>Valor de cada día</span></div>`
+    +`<p class="small muted" style="margin:6px 0 0">Cada punto de la curva es el promedio de los últimos ${VW} días con ficha hasta ese día. Al ${fmtD(ds[N-1].fecha)}: armado ${kg(mA[N-1])} kg/día · revestimiento ${kg(mF[N-1])} kg/día. Promedio del período: armado ${kg(avA)} kg/día · revestimiento ${kg(avF)} kg/día.</p>`;
+  attachTip(box, ds.map((d,i)=>({x:X(i), html:`<b>${fmtD(d.fecha)}</b><br>Armado ${kg(d.a)} kg · prom. 5 días ${kg(mA[i])}<br>Revestimiento ${kg(d.f)} kg · prom. 5 días ${kg(mF[i])}`})));
 }
 function renderProduccion(){
   const el=$("v-prod");
