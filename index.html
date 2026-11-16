@@ -1001,14 +1001,14 @@ function computeRend(){
     if(a+f<=0) continue;
     (days.get(fi.fecha)||days.set(fi.fecha,[]).get(fi.fecha)).push({g:grupoDe(m.tipo),a,f,fm});
   }
-  const G=new Map(); const get=g=>G.get(g)||G.set(g,{g,a:0,f:0,fm:0,hA:0,hF:0,dias:new Set()}).get(g);
+  const G=new Map(); const get=g=>G.get(g)||G.set(g,{g,a:0,f:0,fm:0,hA:0,hF:0,eA:0,eF:0,dias:new Set()}).get(g);
   let totHH=0; for(const [fecha,list] of days){ const den=list.reduce((s,x)=>s+x.a+w*x.f,0); if(den<=0) continue; const hhD=hd*personasEn(fecha); totHH+=hhD;
-    for(const x of list){ const r=get(x.g); r.a+=x.a; r.f+=x.f; r.fm+=x.fm; r.hA+=hhD*x.a/den; r.hF+=hhD*w*x.f/den; r.dias.add(fecha); } }
+    for(const x of list){ const r=get(x.g); r.a+=x.a; r.f+=x.f; r.fm+=x.fm; r.hA+=hhD*x.a/den; r.hF+=hhD*w*x.f/den; r.eA+=hd*x.a/den; r.eF+=hd*w*x.f/den; r.dias.add(fecha); } }
   /* kg por casa de cada grupo, según el catálogo de cada tipo de casa en uso */
   const tipos=[...new Set(st.casas.map(c=>c.tipo))].filter(t=>CAT[t]);
   const catKg={}; for(const t of tipos){ catKg[t]={}; for(const [tipo,code,q,a,f] of CAT[t]){ if(a+f<=0) continue; const g=grupoDe(tipo); const o=catKg[t][g]||(catKg[t][g]={a:0,f:0}); o.a+=q*a; o.f+=q*f; } }
   const allG=new Set([...G.keys(), ...tipos.flatMap(t=>Object.keys(catKg[t]))]);
-  const rows=[...allG].map(g=>{ const r=G.get(g)||{g,a:0,f:0,fm:0,hA:0,hF:0,dias:new Set()}; return {...r, nd:r.dias.size, kphA:r.hA>0?r.a/r.hA:null, kphF:r.hF>0?r.f/r.hF:null, mphF:r.hF>0?r.fm/r.hF:null}; })
+  const rows=[...allG].map(g=>{ const r=G.get(g)||{g,a:0,f:0,fm:0,hA:0,hF:0,eA:0,eF:0,dias:new Set()}; return {...r, nd:r.dias.size, kgh:r.eA>0?r.a/r.eA:null, m2h:r.eF>0?r.fm/r.eF:null, kphA:r.hA>0?r.a/r.hA:null, kphF:r.hF>0?r.f/r.hF:null, mphF:r.hF>0?r.fm/r.hF:null}; })
     .sort((x,y)=>{ const ix=GRUPOS.indexOf(x.g), iy=GRUPOS.indexOf(y.g); return (ix<0?99:ix)-(iy<0?99:iy) || x.g.localeCompare(y.g); });
   /* HH estimadas para una casa completa: kg del catálogo ÷ kg/HH real (si no hay dato, rendimiento piloto ÷ personas) */
   const est=(t,r)=>{ const k=catKg[t][r.g]; if(!k) return null; const pil=PILOTO[t]||{a:60,f:60};
@@ -1021,24 +1021,42 @@ function renderRend(){
   const el=$("v-rend");
   if(st.dbState!=="ok"){ el.innerHTML=statePanel(); return; }
   const R=computeRend(), nf0=new Intl.NumberFormat("es-CL",{maximumFractionDigits:0}), nf2=new Intl.NumberFormat("es-CL",{maximumFractionDigits:2,minimumFractionDigits:2});
-  const hh=v=>v==null?"—":nf0.format(v), kph=v=>v==null?`<span class="muted">—</span>`:nf2.format(v);
+  const hh=v=>v==null?"—":nf0.format(v), dash=`<span class="muted">—</span>`;
   const main=R.rows.filter(r=>GRUPOS.includes(r.g)), otros=R.rows.filter(r=>!GRUPOS.includes(r.g));
   const t0=R.tipos[0];
-  const tabla=rows=>`<div class="tablewrap"><table class="num"><tr><th>Elemento</th><th class="r">Días con producción</th><th class="r">Kg estructura</th><th class="r">HH estructura</th><th class="r">Kg/HH estructura</th><th class="r">m² revestimiento</th><th class="r">HH revestimiento</th><th class="r">m²/HH revestimiento</th><th class="r">HH totales usadas</th>${R.tipos.map(t=>`<th class="r">HH por casa ${esc(catName(t))}</th><th class="r">Días de equipo por casa</th>`).join("")}</tr>
-    ${rows.map(r=>`<tr><td><b>${esc(r.g)}</b></td><td class="r">${r.nd||"—"}</td><td class="r">${kg(r.a)}</td><td class="r">${hh(r.hA)}</td><td class="r">${kph(r.kphA)}</td><td class="r">${r.f>0?fm2(r.fm):"—"}</td><td class="r">${r.hF>0?hh(r.hF):"—"}</td><td class="r">${r.mphF==null?`<span class="muted">—</span>`:nf2.format(r.mphF)}</td><td class="r"><b>${hh(r.hA+r.hF)}</b></td>
-      ${R.tipos.map(t=>{ const e=R.est(t,r); return e?`<td class="r"><b>${hh(e.h)}</b>${e.real?"":` <span class="chip neutral" title="Sin producción registrada: estimado con el rendimiento piloto">piloto</span>`}</td><td class="r">${nf1.format(e.h/R.hhDia)}</td>`:`<td class="r muted">—</td><td class="r muted">—</td>`; }).join("")}</tr>`).join("")}
-  </table></div>`;
-  const tot=main.reduce((s,r)=>s+r.hA+r.hF,0)+otros.reduce((s,r)=>s+r.hA+r.hF,0);
+  /* Totales del taller: kg/h y m²/h con las horas de equipo de todos los días */
+  const T=R.rows.reduce((s,r)=>({a:s.a+r.a,fm:s.fm+r.fm,f:s.f+r.f,eA:s.eA+r.eA,eF:s.eF+r.eF,hA:s.hA+r.hA,hF:s.hF+r.hF}),{a:0,fm:0,f:0,eA:0,eF:0,hA:0,hF:0});
+  const kghT=T.eA>0?T.a/T.eA:null, m2hT=T.eF>0?T.fm/T.eF:null;
   const casaTot=t0? R.rows.reduce((s,r)=>{ const e=R.est(t0,r); return s+(e?e.h:0); },0) : 0;
+  const nC=4+2*R.tipos.length+5;
+  const fila=r=>`<tr><td><b>${esc(r.g)}</b></td><td class="r">${r.nd||"—"}</td>
+    <td class="r">${r.a>0?kg(r.a):"—"}</td><td class="r">${r.eA>0?nf1.format(r.eA):"—"}</td><td class="r key ka">${r.kgh==null?dash:nf1.format(r.kgh)}</td>
+    <td class="r">${r.f>0?fm2(r.fm):"—"}</td><td class="r">${r.eF>0?nf1.format(r.eF):"—"}</td><td class="r key kf">${r.m2h==null?dash:nf2.format(r.m2h)}</td>
+    <td class="r">${hh(r.hA+r.hF)}</td>
+    ${R.tipos.map(t=>{ const e=R.est(t,r); return e?`<td class="r">${hh(e.h)}${e.real?"":` <span class="chip neutral" title="Sin producción registrada: estimado con el rendimiento piloto">piloto</span>`}</td><td class="r">${nf1.format(e.h/R.hhDia)}</td>`:`<td class="r muted">—</td><td class="r muted">—</td>`; }).join("")}</tr>`;
   el.innerHTML=`
-  <div class="headline"><h1>Rendimientos por elemento</h1><span class="meta">Acumulado a la fecha · ${R.totDias} día${R.totDias===1?"":"s"} con ficha · equipo actual de ${R.per} personas × ${nf1.format(R.hd)} h = ${nf1.format(R.hhDia)} HH por día${(()=>{ const l=dotacionList(); return l.length>1? ` (antes: ${l.slice(0,-1).map((x,i)=>`${x.personas} personas hasta el ${fmtDY(addDays(l[i+1].desde,-1))}`).join(", ")})` : ""; })()}</span></div>
+  <style>
+    #v-rend table.rend th.grp{text-align:center;border-bottom:2px solid var(--line-2)}
+    #v-rend table.rend th.grp.ka{border-bottom-color:var(--armado)} #v-rend table.rend th.grp.kf{border-bottom-color:var(--forrado)}
+    #v-rend td.key{font-weight:700;font-size:16px;font-family:var(--f-display)} #v-rend td.key.ka{background:color-mix(in srgb,var(--armado) 12%,transparent)} #v-rend td.key.kf{background:color-mix(in srgb,var(--forrado) 12%,transparent)}
+    #v-rend th.key{color:var(--ink)} #v-rend tr.sub td{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);font-weight:600;padding-top:14px;background:transparent}
+    #v-rend tr.tot td{border-top:2px solid var(--line-2);font-weight:600}
+  </style>
+  <div class="headline"><h1>Rendimientos por elemento</h1><span class="meta">Acumulado a la fecha · ${R.totDias} día${R.totDias===1?"":"s"} con ficha · equipo actual de ${R.per} personas × ${nf1.format(R.hd)} h${(()=>{ const l=dotacionList(); return l.length>1? ` (antes: ${l.slice(0,-1).map((x,i)=>`${x.personas} personas hasta el ${fmtDY(addDays(l[i+1].desde,-1))}`).join(", ")})` : ""; })()}</span></div>
   <div class="tiles">
-    <div class="tile"><span class="lbl">HH trabajadas</span><span class="v num">${hh(R.totHH)}</span><span class="s">${R.totDias} días con ficha × personas de cada día × ${nf1.format(R.hd)} h</span></div>
-    ${t0?`<div class="tile"><span class="lbl">HH por casa ${esc(catName(t0))}</span><span class="v num">${hh(casaTot)}</span><span class="s">${nf1.format(casaTot/R.hhDia)} días de equipo, con el rendimiento real a la fecha</span></div>`:""}
+    <div class="tile" style="border-top:3px solid var(--armado)"><span class="lbl">Armado</span><span class="v num">${kghT==null?"—":nf1.format(kghT)} <small>kg/h</small></span><span class="s">${kg(T.a)} kg en ${nf1.format(T.eA)} h de equipo</span></div>
+    <div class="tile" style="border-top:3px solid var(--forrado)"><span class="lbl">Revestimiento</span><span class="v num">${m2hT==null?"—":nf2.format(m2hT)} <small>m²/h</small></span><span class="s">${fm2(T.fm)} m² en ${nf1.format(T.eF)} h de equipo</span></div>
+    <div class="tile"><span class="lbl">HH trabajadas</span><span class="v num">${hh(R.totHH)}</span><span class="s">${R.totDias} días × personas de cada día × ${nf1.format(R.hd)} h</span></div>
+    ${t0?`<div class="tile"><span class="lbl">Casa ${esc(catName(t0))} completa</span><span class="v num">${nf1.format(casaTot/R.hhDia)} <small>días</small></span><span class="s">${hh(casaTot)} HH con el equipo actual y el rendimiento real</span></div>`:""}
   </div>
-  <div class="panel"><h2>Elementos principales</h2>${tabla(main)}</div>
-  ${otros.length?`<div class="panel"><h2>Otros elementos</h2>${tabla(otros)}</div>`:""}
-  <p class="small muted">Las horas de cada día (personas de ese día × ${nf1.format(R.hd)} h) se reparten entre los elementos fabricados ese día según sus kg, con el revestimiento pesando ${nf1.format(1+(Number(st.cfg.factorForrado)||0))} veces la estructura, igual que en el resto del programa. HH por casa = kg del elemento en el catálogo ÷ kg/HH real, y los días de equipo usan la dotación actual; donde aún no hay producción se usa el rendimiento piloto. Los tipos que no suman kg (${esc((st.cfg.sinKgTipos||[]).join(", ")||"ninguno")}) no se consideran. Personas y horas por día se cambian en Configuración.</p>`;
+  <div class="panel"><div class="tablewrap"><table class="num rend">
+    <tr><th></th><th></th><th class="grp ka" colspan="3">Armado (estructura)</th><th class="grp kf" colspan="3">Revestimiento</th><th></th>${R.tipos.map(t=>`<th class="grp" colspan="2">Casa ${esc(catName(t))} completa</th>`).join("")}</tr>
+    <tr><th>Elemento</th><th class="r">Días</th><th class="r">kg</th><th class="r">Horas</th><th class="r key">kg/h</th><th class="r">m²</th><th class="r">Horas</th><th class="r key">m²/h</th><th class="r">HH usadas</th>${R.tipos.map(()=>`<th class="r">HH</th><th class="r">Días de equipo</th>`).join("")}</tr>
+    ${main.map(fila).join("")}
+    ${otros.length?`<tr class="sub"><td colspan="${nC}">Otros elementos</td></tr>${otros.map(fila).join("")}`:""}
+    <tr class="tot"><td>Total taller</td><td class="r">${R.totDias}</td><td class="r">${kg(T.a)}</td><td class="r">${nf1.format(T.eA)}</td><td class="r key ka">${kghT==null?dash:nf1.format(kghT)}</td><td class="r">${fm2(T.fm)}</td><td class="r">${nf1.format(T.eF)}</td><td class="r key kf">${m2hT==null?dash:nf2.format(m2hT)}</td><td class="r">${hh(T.hA+T.hF)}</td>${R.tipos.map(t=>{ const c=R.rows.reduce((s,r)=>{ const e=R.est(t,r); return s+(e?e.h:0); },0); return `<td class="r">${hh(c)}</td><td class="r">${nf1.format(c/R.hhDia)}</td>`; }).join("")}</tr>
+  </table></div></div>
+  <p class="small muted">kg/h y m²/h son horas de equipo (todo el equipo trabajando): las ${nf1.format(R.hd)} h de cada día se reparten entre los elementos fabricados ese día según sus kg, con el revestimiento pesando ${nf1.format(1+(Number(st.cfg.factorForrado)||0))} veces la estructura, igual que en el resto del programa. HH = horas de equipo × personas de ese día. Casa completa = kg del catálogo ÷ rendimiento real, con la dotación actual; donde aún no hay producción se usa el rendimiento piloto. Los tipos que no suman kg (${esc((st.cfg.sinKgTipos||[]).join(", ")||"ninguno")}) no se consideran. Personas y horas por día se cambian en Configuración.</p>`;
 }
 
 /* ---------- Vista: Producción diaria global (todas las casas) ---------- */
