@@ -218,6 +218,10 @@ function kgM2(){ let v=0; try{ v=Number(st.cfg.kgM2Rev); }catch(e){} return v>0 
 function m2u(r){ const f=+r[4]||0, m=+r[5]||0; return f<=0 ? 0 : (m>0 ? m : f/kgM2()); }
 const fm2 = v => nf1.format(v||0);
 function applyCfg(){ const out={}; for(const t of Object.keys(RAWCAT)) out[t]=RAWCAT[t].map(r=> noSumaKg(r[0]) ? [r[0],r[1],r[2],0,0,0] : noForrado(r[1]) ? [r[0],r[1],r[2],r[3],0,0] : r); CAT=out; rebuildIdx(); }
+/* Dotación del equipo por fecha: cfg.dotacion = [{desde:"AAAA-MM-DD", personas}]; sin registro, cfg.personas */
+function dotacionList(){ return (st.cfg.dotacion||[]).filter(x=>x&&/^\d{4}-\d{2}-\d{2}$/.test(x.desde)&&+x.personas>0).map(x=>({desde:x.desde,personas:Math.round(+x.personas)})).sort((a,b)=>a.desde<b.desde?-1:1); }
+function personasEn(fecha){ const l=dotacionList(); if(!l.length) return Math.max(1,Number(st.cfg.personas)||7); let n=l[0].personas; for(const x of l) if(x.desde<=fecha) n=x.personas; return Math.max(1,n); }
+const personasHoy = () => personasEn(todayS());
 const lookup = (tipo,code) => (code && IDX[tipo] && IDX[tipo].get(norm(code))) || null;
 /* Una fila de ficha guarda el código reconocido (c) y lo escrito (raw); si el catálogo cambia, se vuelve a reconocer por lo escrito */
 const match = (tipo,it) => lookup(tipo,it.c) || lookup(tipo,it.raw);
@@ -741,6 +745,7 @@ function renderFichas(){
 }
 
 /* ---------- Vista: Configuración ---------- */
+const dotRow=(desde,n)=>`<div class="row" data-dot><input type="date" value="${esc(desde&&desde>"2000-01-01"?desde:"")}" aria-label="Desde"><input type="number" step="1" min="1" value="${n}" aria-label="Personas"><span class="small muted">personas</span><button class="ghost danger" data-dotdel type="button">Quitar</button></div>`;
 function renderObras(){
   const el=$("v-obras");
   if(st.dbState!=="ok"){ el.innerHTML=statePanel(); return; }
@@ -763,7 +768,7 @@ function renderObras(){
     <div class="form">
       <label>Horas efectivas por día<input type="number" step="0.5" min="1" id="pHoras" value="${cfg.horasDia}"></label>
       <label>Revestimiento más lento que armado (factor)<input type="number" step="0.05" min="0" id="pFactor" value="${cfg.factorForrado}"></label>
-      <label>Personas en el equipo<input type="number" step="1" min="1" id="pPers" value="${cfg.personas||7}"></label>
+      <div style="grid-column:1/-1;display:grid;gap:6px"><span class="small" style="color:var(--ink-2)">Personas en el equipo (desde cada fecha)</span><div id="pDot" style="display:grid;gap:6px">${(dotacionList().length?dotacionList():[{desde:"",personas:cfg.personas||7}]).map(x=>dotRow(x.desde,x.personas)).join("")}</div><div class="row"><button type="button" id="pDotAdd">Agregar cambio de dotación</button><span class="small muted">Cada día usa la dotación vigente en su fecha. Sin fecha = desde el inicio.</span></div></div>
       <label>Kg por m² de revestimiento (solo si un elemento no tiene m²)<input type="number" step="0.01" min="0.1" id="pKgM2" value="${cfg.kgM2Rev||8.38}"></label>
       <label>Días hábiles<select id="pSab"><option value="0"${cfg.sabado?"":" selected"}>Lunes a viernes</option><option value="1"${cfg.sabado?" selected":""}>Lunes a sábado</option></select></label>
       <label style="grid-column:1/-1">Feriados (AAAA-MM-DD, separados por coma)<input type="text" id="pFer" value="${esc((cfg.feriados||[]).join(", "))}"></label>
@@ -781,10 +786,14 @@ function renderObras(){
   el.querySelectorAll("[data-cdel]").forEach(b=>b.onclick=()=>{ const id=b.dataset.cdel; const n=st.fichas.filter(f=>fichaCasas(f).includes(id)).length; const w=el.querySelector(`[data-cdw="${CSS.escape(id)}"]`);
     w.innerHTML = n? `<span class="small">Tiene ${n} ficha${n>1?"s":""}; elimínalas primero.</span>` : `<span class="small">¿Eliminar?</span> <button class="ghost danger" data-ok>Sí</button><button class="ghost" data-no>No</button>`;
     if(!n){ w.querySelector("[data-no]").onclick=renderObras; w.querySelector("[data-ok]").onclick=async()=>{ try{ await st.db.collection("casas").doc(id).delete(); toast("Casa eliminada"); }catch(e){ toast("No se pudo eliminar: "+(e.message||e.code)); } }; } });
+  const dotBind=()=>el.querySelectorAll("[data-dotdel]").forEach(b=>b.onclick=()=>{ if(el.querySelectorAll("[data-dot]").length>1) b.closest("[data-dot]").remove(); });
+  dotBind(); $("pDotAdd").onclick=()=>{ $("pDot").insertAdjacentHTML("beforeend", dotRow(todayS(), personasHoy())); dotBind(); };
   if($("pSave")) $("pSave").onclick=async()=>{ const fer=$("pFer").value.split(/[,\s]+/).map(s=>s.trim()).filter(s=>/^\d{4}-\d{2}-\d{2}$/.test(s));
     const sinF=$("pSinF").value.split(/[,;]+/).map(s=>s.trim().toUpperCase()).filter(Boolean);
     const sinKg=$("pSinKg").value.split(/[,;]+/).map(s=>s.trim()).filter(Boolean);
-    const doc={horasDia:Math.max(1,+$("pHoras").value||7), factorForrado:Math.max(0,+$("pFactor").value||0), sabado:$("pSab").value==="1", feriados:fer, sinForrado:sinF, sinKgTipos:sinKg, personas:Math.max(1,Math.round(+$("pPers").value||7)), kgM2Rev:(+$("pKgM2").value>0? +$("pKgM2").value : 8.38)};
+    const dot=[...el.querySelectorAll("[data-dot]")].map(r=>{ const [d,n]=r.querySelectorAll("input"); return {desde:d.value||"2000-01-01", personas:Math.max(1,Math.round(+n.value||7))}; }).sort((a,b)=>a.desde<b.desde?-1:1);
+    let pHoy=dot[0].personas; for(const x of dot) if(x.desde<=todayS()) pHoy=x.personas;
+    const doc={horasDia:Math.max(1,+$("pHoras").value||7), factorForrado:Math.max(0,+$("pFactor").value||0), sabado:$("pSab").value==="1", feriados:fer, sinForrado:sinF, sinKgTipos:sinKg, personas:pHoy, dotacion:dot, kgM2Rev:(+$("pKgM2").value>0? +$("pKgM2").value : 8.38)};
     try{ await st.db.collection("config").doc("general").set(doc); toast("Parámetros guardados"); }catch(e){ toast("No se pudo guardar: "+(e.message||e.code)); } };
 }
 
@@ -979,7 +988,7 @@ function grupoDe(tipo){ const t=String(tipo||"").toLowerCase();
   if(/escal/.test(t)) return "Escalera";
   return String(tipo||"Otros").replace(/^\w/,c=>c.toUpperCase()); }
 function computeRend(){
-  const cfg=st.cfg, hd=Number(cfg.horasDia)||7, per=Math.max(1,Number(cfg.personas)||7), hhDia=hd*per, w=1+(Number(cfg.factorForrado)||0);
+  const cfg=st.cfg, hd=Number(cfg.horasDia)||7, per=personasHoy(), hhDia=hd*per, w=1+(Number(cfg.factorForrado)||0);
   const casas=new Map(st.casas.map(c=>[c.id,c]));
   const fichas=[...st.fichas].sort((x,y)=>x.fecha<y.fecha?-1:x.fecha>y.fecha?1:(x.creado||0)-(y.creado||0));
   const seen=new Map(); const days=new Map(); /* fecha -> [{g,a,f}] */
@@ -993,8 +1002,8 @@ function computeRend(){
     (days.get(fi.fecha)||days.set(fi.fecha,[]).get(fi.fecha)).push({g:grupoDe(m.tipo),a,f,fm});
   }
   const G=new Map(); const get=g=>G.get(g)||G.set(g,{g,a:0,f:0,fm:0,hA:0,hF:0,dias:new Set()}).get(g);
-  for(const [fecha,list] of days){ const den=list.reduce((s,x)=>s+x.a+w*x.f,0); if(den<=0) continue;
-    for(const x of list){ const r=get(x.g); r.a+=x.a; r.f+=x.f; r.fm+=x.fm; r.hA+=hhDia*x.a/den; r.hF+=hhDia*w*x.f/den; r.dias.add(fecha); } }
+  let totHH=0; for(const [fecha,list] of days){ const den=list.reduce((s,x)=>s+x.a+w*x.f,0); if(den<=0) continue; const hhD=hd*personasEn(fecha); totHH+=hhD;
+    for(const x of list){ const r=get(x.g); r.a+=x.a; r.f+=x.f; r.fm+=x.fm; r.hA+=hhD*x.a/den; r.hF+=hhD*w*x.f/den; r.dias.add(fecha); } }
   /* kg por casa de cada grupo, según el catálogo de cada tipo de casa en uso */
   const tipos=[...new Set(st.casas.map(c=>c.tipo))].filter(t=>CAT[t]);
   const catKg={}; for(const t of tipos){ catKg[t]={}; for(const [tipo,code,q,a,f] of CAT[t]){ if(a+f<=0) continue; const g=grupoDe(tipo); const o=catKg[t][g]||(catKg[t][g]={a:0,f:0}); o.a+=q*a; o.f+=q*f; } }
@@ -1005,7 +1014,7 @@ function computeRend(){
   const est=(t,r)=>{ const k=catKg[t][r.g]; if(!k) return null; const pil=PILOTO[t]||{a:60,f:60};
     const rA=r.kphA ?? pil.a/per, rF=r.kphF ?? pil.f/per; const hA=k.a/rA, hF=k.f>0? k.f/rF : 0;
     return {hA,hF,h:hA+hF,real:!!(r.kphA && (k.f<=0 || r.kphF))}; };
-  const totDias=days.size, totHH=totDias*hhDia;
+  const totDias=days.size;
   return {rows,tipos,catKg,est,hd,per,hhDia,totDias,totHH};
 }
 function renderRend(){
@@ -1022,14 +1031,14 @@ function renderRend(){
   const tot=main.reduce((s,r)=>s+r.hA+r.hF,0)+otros.reduce((s,r)=>s+r.hA+r.hF,0);
   const casaTot=t0? R.rows.reduce((s,r)=>{ const e=R.est(t0,r); return s+(e?e.h:0); },0) : 0;
   el.innerHTML=`
-  <div class="headline"><h1>Rendimientos por elemento</h1><span class="meta">Acumulado a la fecha · ${R.totDias} día${R.totDias===1?"":"s"} con ficha · equipo de ${R.per} personas × ${nf1.format(R.hd)} h = ${nf1.format(R.hhDia)} HH por día</span></div>
+  <div class="headline"><h1>Rendimientos por elemento</h1><span class="meta">Acumulado a la fecha · ${R.totDias} día${R.totDias===1?"":"s"} con ficha · equipo actual de ${R.per} personas × ${nf1.format(R.hd)} h = ${nf1.format(R.hhDia)} HH por día${(()=>{ const l=dotacionList(); return l.length>1? ` (antes: ${l.slice(0,-1).map((x,i)=>`${x.personas} personas hasta el ${fmtDY(addDays(l[i+1].desde,-1))}`).join(", ")})` : ""; })()}</span></div>
   <div class="tiles">
-    <div class="tile"><span class="lbl">HH trabajadas</span><span class="v num">${hh(R.totHH)}</span><span class="s">${R.totDias} días × ${nf1.format(R.hhDia)} HH</span></div>
+    <div class="tile"><span class="lbl">HH trabajadas</span><span class="v num">${hh(R.totHH)}</span><span class="s">${R.totDias} días con ficha × personas de cada día × ${nf1.format(R.hd)} h</span></div>
     ${t0?`<div class="tile"><span class="lbl">HH por casa ${esc(catName(t0))}</span><span class="v num">${hh(casaTot)}</span><span class="s">${nf1.format(casaTot/R.hhDia)} días de equipo, con el rendimiento real a la fecha</span></div>`:""}
   </div>
   <div class="panel"><h2>Elementos principales</h2>${tabla(main)}</div>
   ${otros.length?`<div class="panel"><h2>Otros elementos</h2>${tabla(otros)}</div>`:""}
-  <p class="small muted">Las horas de cada día (${nf1.format(R.hhDia)} HH) se reparten entre los elementos fabricados ese día según sus kg, con el revestimiento pesando ${nf1.format(1+(Number(st.cfg.factorForrado)||0))} veces la estructura, igual que en el resto del programa. HH por casa = kg del elemento en el catálogo ÷ kg/HH real; donde aún no hay producción se usa el rendimiento piloto. Los tipos que no suman kg (${esc((st.cfg.sinKgTipos||[]).join(", ")||"ninguno")}) no se consideran. Personas y horas por día se cambian en Configuración.</p>`;
+  <p class="small muted">Las horas de cada día (personas de ese día × ${nf1.format(R.hd)} h) se reparten entre los elementos fabricados ese día según sus kg, con el revestimiento pesando ${nf1.format(1+(Number(st.cfg.factorForrado)||0))} veces la estructura, igual que en el resto del programa. HH por casa = kg del elemento en el catálogo ÷ kg/HH real, y los días de equipo usan la dotación actual; donde aún no hay producción se usa el rendimiento piloto. Los tipos que no suman kg (${esc((st.cfg.sinKgTipos||[]).join(", ")||"ninguno")}) no se consideran. Personas y horas por día se cambian en Configuración.</p>`;
 }
 
 /* ---------- Vista: Producción diaria global (todas las casas) ---------- */
