@@ -1188,8 +1188,8 @@ function elemEstado(R,row){
   return {k:"pend", chip:`<span class="chip neutral">Pendiente</span>`, p};
 }
 /* Pizarra de avance: filas = partes de la casa, columnas = casas; ✓ armado y ✓ revestimiento por parte */
-const PARTES=["Escalera","1er piso","Entrepiso","2do piso","Techo"];
-function parteDe(tipo){ const t=String(tipo||"").toLowerCase(); if(/techumbre|cercha|front/.test(t)) return "Techo"; return grupoDe(tipo); }
+const PARTES=["Escalera","1er piso","Entrepiso","2do piso","Cerchas","Cubierta"];
+function parteDe(tipo){ const t=String(tipo||"").toLowerCase(); if(/cercha|front/.test(t)) return "Cerchas"; if(/techumbre|cubierta/.test(t)) return "Cubierta"; if(/sobretabique/.test(t)) return "2do piso"; return grupoDe(tipo); }
 function avancePartes(R){
   const P=new Map();
   for(const r of (CAT[R.casa.tipo]||[])){ const [tipo,code,q,a,f]=r; if(noSumaKg(tipo) || a+f<=0) continue; const g=parteDe(tipo);
@@ -1211,16 +1211,14 @@ function envioMarca(R,g){ const f=(R.casa.envios||{})[g];
 function renderPizarra(Rs){
   const Ps=Rs.map(R=>avancePartes(R)); const R0=P=>Rs[Ps.indexOf(P)];
   const extra=[...new Set(Ps.flatMap(P=>[...P.keys()]))].filter(g=>!PARTES.includes(g));
-  const filas=[...PARTES,...extra].filter(g=>Ps.some(P=>P.has(g)));
-  const col=R=>esc(R.casa.numero||R.casa.nombre);
+  const cols=[...PARTES,...extra].filter(g=>Ps.some(P=>P.has(g)));
   return `<div class="panel" style="display:grid;gap:10px">
     <div class="row"><h2 class="grow">Pizarra de avance</h2><span class="legend" style="margin:0"><span><b style="color:var(--armado)">✓</b> Armado</span><span><b style="color:var(--forrado)">✓</b> Revestimiento</span><span><span class="pz-m part" style="--c:var(--ink-3);--p:40%;transform:scale(.8)"><b>40</b></span> % en proceso</span><span><span class="pz-env si" style="vertical-align:-2px"></span> Enviado a obra</span><span>– no aplica</span></span></div>${st.isAdmin?`<p class="small muted" style="margin:0">Toca el círculo de una parte para marcarla como enviada a obra (queda con la fecha de hoy); tócalo de nuevo para quitarla.</p>`:""}
     <div class="tablewrap"><table class="pz">
-      <tr><th></th>${Rs.map(R=>`<th class="c"><a href="#casas" data-pz="${esc(R.casa.id)}" title="${esc(R.casa.nombre)}">${col(R)}</a></th>`).join("")}</tr>
-      ${filas.map(g=>`<tr><th class="f">${esc(g)}</th>${Ps.map(P=>{ const o=P.get(g); if(!o) return `<td class="c muted">—</td>`;
+      <tr><th class="f">Casa</th>${cols.map(g=>`<th class="c">${esc(g)}</th>`).join("")}<th class="c">Total</th></tr>
+      ${Rs.map((R,ri)=>{ const P=Ps[ri]; return `<tr><th class="f"><a href="#casas" data-pz="${esc(R.casa.id)}" title="${esc(R.casa.nombre)}">${esc(R.casa.numero||R.casa.nombre)}</a></th>${cols.map(g=>{ const o=P.get(g); if(!o) return `<td class="c muted">—</td>`;
         const tot=o.ta+o.tf, v=tot?(o.da+o.df)/tot:0;
-        return `<td class="c"><div class="pz-cell">${marca(o.da,o.ta,"var(--armado)","Armado")}${marca(o.df,o.tf,"var(--forrado)","Revestimiento")}${envioMarca(R0(P),g)}</div><div class="bar" style="height:4px;margin-top:4px" title="${pct(v)} de los kg de ${esc(g)}"><i style="width:${o.ta+o.tf?o.da/(tot)*100:0}%;background:var(--armado)"></i><i style="width:${tot?o.df/tot*100:0}%;background:var(--forrado)"></i></div></td>`; }).join("")}</tr>`).join("")}
-      <tr class="tot"><th class="f">Total</th>${Rs.map(R=>`<td class="c"><b class="num">${pct(R.avance)}</b></td>`).join("")}</tr>
+        return `<td class="c"><div class="pz-cell">${marca(o.da,o.ta,"var(--armado)","Armado")}${marca(o.df,o.tf,"var(--forrado)","Revestimiento")}${envioMarca(R,g)}</div><div class="bar" style="height:4px;margin-top:4px" title="${pct(v)} de los kg de ${esc(g)}"><i style="width:${tot?o.da/tot*100:0}%;background:var(--armado)"></i><i style="width:${tot?o.df/tot*100:0}%;background:var(--forrado)"></i></div></td>`; }).join("")}<td class="c"><b class="num">${pct(R.avance)}</b></td></tr>`; }).join("")}
     </table></div>
   </div>`;
 }
@@ -1233,7 +1231,8 @@ function renderCasas(){
     table.pz{border-collapse:collapse;width:auto;min-width:100%}
     table.pz th,table.pz td{border-bottom:1px solid var(--line);padding:8px 10px}
     table.pz th.c,table.pz td.c{text-align:center;min-width:92px}
-    table.pz th.c a{font-family:var(--f-display);font-size:20px;font-weight:700;color:var(--ink);text-decoration:none}
+    table.pz th.c{font-family:var(--f-display);font-size:15px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--ink);white-space:nowrap}
+    table.pz th.f a{font-family:var(--f-display);font-size:20px;font-weight:700;color:var(--ink);text-decoration:none}
     table.pz th.f{font-family:var(--f-display);font-size:16px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--ink);white-space:nowrap}
     table.pz tr.tot td,table.pz tr.tot th{border-top:2px solid var(--line-2);border-bottom:0}
     .pz-cell{display:flex;justify-content:center;gap:6px;align-items:center;min-height:30px}
