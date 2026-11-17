@@ -122,7 +122,7 @@ details.casa[open] .muted.small+span{}
     <div class="brand"><b>DMI-A</b><span>Producción diaria · Taller de prefabricados</span><span id="pubStamp" style="text-transform:none;letter-spacing:0"></span></div>
     <nav class="tabs" id="tabs">
       <a href="#produccion" data-v="produccion">Producción diaria</a>
-      <a href="#casas" data-v="casas">Casas</a>
+      <a href="#casas" data-v="casas">Avance</a>
       <a href="#detalle" data-v="detalle">Detalle casa</a>
       <a href="#rendimientos" data-v="rendimientos" class="adminOnly">Rendimientos</a>
       <a href="#cargar" data-v="cargar" class="adminOnly">Cargar ficha</a>
@@ -1187,12 +1187,69 @@ function elemEstado(R,row){
   if(p.a>0) return {k:"pend", chip:`<span class="chip neutral">Estructura ${p.a}/${q}</span>`, p};
   return {k:"pend", chip:`<span class="chip neutral">Pendiente</span>`, p};
 }
+/* Pizarra de avance: filas = partes de la casa, columnas = casas; ✓ armado y ✓ revestimiento por parte */
+const PARTES=["Escalera","1er piso","Entrepiso","2do piso","Techo"];
+function parteDe(tipo){ const t=String(tipo||"").toLowerCase(); if(/techumbre|cercha|front/.test(t)) return "Techo"; return grupoDe(tipo); }
+function avancePartes(R){
+  const P=new Map();
+  for(const r of (CAT[R.casa.tipo]||[])){ const [tipo,code,q,a,f]=r; if(noSumaKg(tipo) || a+f<=0) continue; const g=parteDe(tipo);
+    const o=P.get(g)||P.set(g,{g,ta:0,tf:0,da:0,df:0,n:0}).get(g); const pr=R.prod.get(code)||{a:0,o:0};
+    o.ta+=q*a; o.tf+=q*f; o.da+=Math.min(q,pr.a||0)*a; o.df+=Math.min(q,pr.o||0)*f; o.n+=q; }
+  return P;
+}
+function marca(done,tot,col,nom){
+  if(tot<=0) return `<span class="pz-m na" title="${nom}: no aplica">–</span>`;
+  const v=done/tot;
+  if(v>=0.999) return `<span class="pz-m ok" style="color:${col}" title="${nom}: completo">✓</span>`;
+  if(v<=0) return `<span class="pz-m no" title="${nom}: sin avance">·</span>`;
+  return `<span class="pz-m part" style="--c:${col};--p:${v*100}%" title="${nom}: ${pct(v)}"><b>${Math.round(v*100)}</b></span>`;
+}
+/* Envío a obra: casas.envios = {parte: "AAAA-MM-DD"}; lo marca un administrador en la pizarra */
+function envioMarca(R,g){ const f=(R.casa.envios||{})[g];
+  if(f) return `<span class="pz-env si${st.isAdmin?" btn":""}" ${st.isAdmin?`role="button" tabindex="0" data-env="${esc(R.casa.id)}" data-g="${esc(g)}"`:""} title="Enviado a obra el ${fmtDY(f)}${st.isAdmin?" · clic para quitar":""}"></span>`;
+  return st.isAdmin? `<span class="pz-env btn" role="button" tabindex="0" data-env="${esc(R.casa.id)}" data-g="${esc(g)}" title="Marcar enviado a obra hoy"></span>` : `<span class="pz-env vacio"></span>`; }
+function renderPizarra(Rs){
+  const Ps=Rs.map(R=>avancePartes(R)); const R0=P=>Rs[Ps.indexOf(P)];
+  const extra=[...new Set(Ps.flatMap(P=>[...P.keys()]))].filter(g=>!PARTES.includes(g));
+  const filas=[...PARTES,...extra].filter(g=>Ps.some(P=>P.has(g)));
+  const col=R=>esc(R.casa.numero||R.casa.nombre);
+  return `<div class="panel" style="display:grid;gap:10px">
+    <div class="row"><h2 class="grow">Pizarra de avance</h2><span class="legend" style="margin:0"><span><b style="color:var(--armado)">✓</b> Armado</span><span><b style="color:var(--forrado)">✓</b> Revestimiento</span><span><span class="pz-m part" style="--c:var(--ink-3);--p:40%;transform:scale(.8)"><b>40</b></span> % en proceso</span><span><span class="pz-env si" style="vertical-align:-2px"></span> Enviado a obra</span><span>– no aplica</span></span></div>${st.isAdmin?`<p class="small muted" style="margin:0">Toca el círculo de una parte para marcarla como enviada a obra (queda con la fecha de hoy); tócalo de nuevo para quitarla.</p>`:""}
+    <div class="tablewrap"><table class="pz">
+      <tr><th></th>${Rs.map(R=>`<th class="c"><a href="#casas" data-pz="${esc(R.casa.id)}" title="${esc(R.casa.nombre)}">${col(R)}</a></th>`).join("")}</tr>
+      ${filas.map(g=>`<tr><th class="f">${esc(g)}</th>${Ps.map(P=>{ const o=P.get(g); if(!o) return `<td class="c muted">—</td>`;
+        const tot=o.ta+o.tf, v=tot?(o.da+o.df)/tot:0;
+        return `<td class="c"><div class="pz-cell">${marca(o.da,o.ta,"var(--armado)","Armado")}${marca(o.df,o.tf,"var(--forrado)","Revestimiento")}${envioMarca(R0(P),g)}</div><div class="bar" style="height:4px;margin-top:4px" title="${pct(v)} de los kg de ${esc(g)}"><i style="width:${o.ta+o.tf?o.da/(tot)*100:0}%;background:var(--armado)"></i><i style="width:${tot?o.df/tot*100:0}%;background:var(--forrado)"></i></div></td>`; }).join("")}</tr>`).join("")}
+      <tr class="tot"><th class="f">Total</th>${Rs.map(R=>`<td class="c"><b class="num">${pct(R.avance)}</b></td>`).join("")}</tr>
+    </table></div>
+  </div>`;
+}
 function renderCasas(){
   const el=$("v-casas");
   if(st.dbState!=="ok"){ el.innerHTML=statePanel(); return; }
   if(!st.casas.length){ el.innerHTML=`<div class="panel empty"><h2>No hay casas</h2><a class="adminOnly" href="#obras"><button class="pri">Agregar una casa</button></a></div>`; return; }
   const Rs=st.casas.map(c=>computeCasa(c)); st.openCasas ||= new Set();
-  el.innerHTML=`<div class="headline"><h1>Avance por casa</h1><span class="meta">${Rs.length} casa${Rs.length===1?"":"s"} · abre cada casa para ver el listado de tabiques</span></div>
+  el.innerHTML=`<style>
+    table.pz{border-collapse:collapse;width:auto;min-width:100%}
+    table.pz th,table.pz td{border-bottom:1px solid var(--line);padding:8px 10px}
+    table.pz th.c,table.pz td.c{text-align:center;min-width:92px}
+    table.pz th.c a{font-family:var(--f-display);font-size:20px;font-weight:700;color:var(--ink);text-decoration:none}
+    table.pz th.f{font-family:var(--f-display);font-size:16px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--ink);white-space:nowrap}
+    table.pz tr.tot td,table.pz tr.tot th{border-top:2px solid var(--line-2);border-bottom:0}
+    .pz-cell{display:flex;justify-content:center;gap:6px;align-items:center;min-height:30px}
+    .pz-m{display:inline-grid;place-items:center;width:28px;height:28px;font-size:24px;font-weight:700;line-height:1}
+    .pz-m.na,.pz-m.no{color:var(--line-2);font-size:20px}
+    .pz-m.part{border-radius:50%;background:conic-gradient(var(--c) var(--p),var(--line) 0);position:relative}
+    .pz-m.part::before{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--panel)}
+    .pz-m.part b{position:relative;font-size:10px;font-weight:600;color:var(--ink-2)}
+    .pz-env{display:inline-block;width:14px;height:14px;border-radius:50%;flex:none}
+    .pz-env.si{background:#f28c28;box-shadow:0 0 0 2px color-mix(in srgb,#f28c28 30%,transparent)}
+    .pz-env.btn:not(.si){border:1.5px dashed var(--line-2)} .pz-env.btn{cursor:pointer} .pz-env.btn:hover{outline:2px solid #f28c28;outline-offset:2px}
+    .pz-env.vacio{visibility:hidden}
+    @media (max-width:560px){ table.pz th,table.pz td{padding:6px 3px} table.pz th.c,table.pz td.c{min-width:62px} table.pz th.f{font-size:14px;white-space:normal} .pz-m{width:22px;font-size:20px} .pz-cell{gap:2px} }
+  </style>
+  <div class="headline"><h1>Avance por casa</h1><span class="meta">${Rs.length} casa${Rs.length===1?"":"s"} · abre cada casa para ver el listado de tabiques</span></div>
+  ${renderPizarra(Rs)}
   ${Rs.map(R=>{ const cat=(CAT[R.casa.tipo]||[]).filter(r=>!noSumaKg(r[0])); const cnt={ok:0,forro:0,pend:0}; for(const r of cat) cnt[elemEstado(R,r).k]+=r[2];
     const status = R.avance>=1 ? `<span class="chip good">Terminada</span>` : R.retraso>0.05 ? `<span class="chip crit">Atrasada ${pct(R.retraso)}</span>` : R.retraso>0.005 ? `<span class="chip warn">Leve atraso ${pct(R.retraso)}</span>` : `<span class="chip good">Al día</span>`;
     return `<details class="panel casa" data-casa="${esc(R.casa.id)}"${st.openCasas.has(R.casa.id)?" open":""}>
@@ -1219,6 +1276,12 @@ function renderCasas(){
   el.querySelectorAll("details.casa").forEach(det=>{ const R=Rs.find(x=>x.casa.id===det.dataset.casa);
     if(det.open) draw(det,R);
     det.addEventListener("toggle",()=>{ if(det.open){ st.openCasas.add(R.casa.id); draw(det,R); } else st.openCasas.delete(R.casa.id); }); });
+  el.querySelectorAll("[data-env]").forEach(b=>{ const go=async()=>{ const c=st.casas.find(x=>x.id===b.dataset.env); if(!c) return; const g=b.dataset.g, env={...(c.envios||{})}; const quitar=!!env[g];
+      if(quitar) delete env[g]; else env[g]=todayS();
+      try{ await st.db.collection("casas").doc(c.id).update({envios:env}); c.envios=env; toast(quitar?`${g} de ${c.nombre}: envío quitado`:`${g} de ${c.nombre}: enviado a obra hoy`); renderCasas(); }
+      catch(err){ toast("No se pudo guardar: "+(err.message||err.code)); } };
+    b.onclick=e=>{ e.preventDefault(); go(); }; b.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } }; });
+  el.querySelectorAll("[data-pz]").forEach(a=>a.onclick=e=>{ e.preventDefault(); const det=el.querySelector(`details.casa[data-casa="${CSS.escape(a.dataset.pz)}"]`); if(det){ det.open=true; det.scrollIntoView({behavior:"smooth",block:"start"}); } });
   el.querySelectorAll("[data-det]").forEach(b=>b.onclick=e=>{ e.preventDefault(); e.stopPropagation(); st.casaId=b.dataset.det; st.corte=null; saveSel(); location.hash="#detalle"; });
 }
 
