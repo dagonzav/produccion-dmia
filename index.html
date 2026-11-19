@@ -1277,7 +1277,7 @@ function renderCasas(){
     det.addEventListener("toggle",()=>{ if(det.open){ st.openCasas.add(R.casa.id); draw(det,R); } else st.openCasas.delete(R.casa.id); }); });
   el.querySelectorAll("[data-env]").forEach(b=>{ const go=async()=>{ const c=st.casas.find(x=>x.id===b.dataset.env); if(!c) return; const g=b.dataset.g, env={...(c.envios||{})}; const quitar=!!env[g];
       if(quitar) delete env[g]; else env[g]=todayS();
-      try{ await st.db.collection("casas").doc(c.id).update({envios:env}); c.envios=env; toast(quitar?`${g} de ${c.nombre}: envío quitado`:`${g} de ${c.nombre}: enviado a obra hoy`); renderCasas(); }
+      try{ /* set del documento completo: update mezcla el mapa envios y no borra la parte quitada */ const {id:_id, ...datos}=c; await st.db.collection("casas").doc(c.id).set({...datos, envios:env}); c.envios=env; toast(quitar?`${g} de ${c.nombre}: envío quitado`:`${g} de ${c.nombre}: enviado a obra hoy`); renderCasas(); }
       catch(err){ toast("No se pudo guardar: "+(err.message||err.code)); } };
     b.onclick=e=>{ e.preventDefault(); go(); }; b.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } }; });
   el.querySelectorAll("[data-pz]").forEach(a=>a.onclick=e=>{ e.preventDefault(); const det=el.querySelector(`details.casa[data-casa="${CSS.escape(a.dataset.pz)}"]`); if(det){ det.open=true; det.scrollIntoView({behavior:"smooth",block:"start"}); } });
