@@ -1004,7 +1004,10 @@ function computeRend(){
   const G=new Map(); const get=g=>G.get(g)||G.set(g,{g,a:0,f:0,fm:0,hA:0,hF:0,eA:0,eF:0,dias:new Set()}).get(g);
   /* Por casa: las horas de cada día se reparten entre las casas trabajadas ese día según sus kg (revestimiento ponderado) */
   const CS=new Map();
-  let totHH=0; for(const [fecha,list] of days){ const den=list.reduce((s,x)=>s+x.a+w*x.f,0); if(den<=0) continue; const hhD=hd*personasEn(fecha); totHH+=hhD;
+  /* Rango de fechas elegido en la pestaña (vacío = todo). Los elementos se siguen deduplicando con toda la historia; solo se cuentan los días dentro del rango */
+  const rg=st.rendRango||{}, inR=f=>(!rg.d||f>=rg.d)&&(!rg.h||f<=rg.h);
+  const todas=[...days.keys()].sort(), fMin=todas[0]||null, fMax=todas[todas.length-1]||null;
+  let totHH=0; for(const [fecha,list] of days){ if(!inR(fecha)) continue; const den=list.reduce((s,x)=>s+x.a+w*x.f,0); if(den<=0) continue; const hhD=hd*personasEn(fecha); totHH+=hhD;
     for(const x of list){ const r=get(x.g); r.a+=x.a; r.f+=x.f; r.fm+=x.fm; r.hA+=hhD*x.a/den; r.hF+=hhD*w*x.f/den; r.eA+=hd*x.a/den; r.eF+=hd*w*x.f/den; r.dias.add(fecha);
       const cc=CS.get(x.c)||CS.set(x.c,{id:x.c,a:0,f:0,fm:0,h:0,hh:0,dias:new Set()}).get(x.c); cc.a+=x.a; cc.f+=x.f; cc.fm+=x.fm; cc.h+=hd*(x.a+w*x.f)/den; cc.hh+=hhD*(x.a+w*x.f)/den; cc.dias.add(fecha); } }
   /* kg por casa de cada grupo, según el catálogo de cada tipo de casa en uso */
@@ -1017,11 +1020,11 @@ function computeRend(){
   const est=(t,r)=>{ const k=catKg[t][r.g]; if(!k) return null; const pil=PILOTO[t]||{a:60,f:60};
     const rA=r.kphA ?? pil.a/per, rF=r.kphF ?? pil.f/per; const hA=k.a/rA, hF=k.f>0? k.f/rF : 0;
     return {hA,hF,h:hA+hF,real:!!(r.kphA && (k.f<=0 || r.kphF))}; };
-  const totDias=days.size;
+  const totDias=todas.filter(inR).length;
   const casasR=st.casas.map(c=>{ const x=CS.get(c.id)||{a:0,f:0,fm:0,h:0,hh:0,dias:new Set()}; const d=[...x.dias].sort(); const C=computeCasa(c);
     return {casa:c, nd:d.length, ini:d[0]||null, fin:d[d.length-1]||null, h:x.h, hh:x.hh, a:x.a, fm:x.fm, avance:C.avance, done:C.avance>=1}; })
     .sort((x,y)=>(x.ini||"9")<(y.ini||"9")?-1:(x.ini||"9")>(y.ini||"9")?1:0);
-  return {rows,tipos,catKg,est,hd,per,hhDia,totDias,totHH,casasR};
+  return {rows,tipos,catKg,est,hd,per,hhDia,totDias,totHH,casasR,rg,fMin,fMax};
 }
 function renderRend(){
   const el=$("v-rend");
@@ -1048,7 +1051,14 @@ function renderRend(){
     #v-rend th.key{color:var(--ink)} #v-rend tr.sub td{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);font-weight:600;padding-top:14px;background:transparent}
     #v-rend tr.tot td{border-top:2px solid var(--line-2);font-weight:600}
   </style>
-  <div class="headline"><h1>Rendimientos por elemento</h1><span class="meta">Acumulado a la fecha · ${R.totDias} día${R.totDias===1?"":"s"} con ficha · equipo actual de ${R.per} personas × ${nf1.format(R.hd)} h${(()=>{ const l=dotacionList(); return l.length>1? ` (antes: ${l.slice(0,-1).map((x,i)=>`${x.personas} personas hasta el ${fmtDY(addDays(l[i+1].desde,-1))}`).join(", ")})` : ""; })()}</span></div>
+  <div class="headline"><h1>Rendimientos por elemento</h1><span class="meta">${R.rg.d||R.rg.h?`Del ${fmtDY(R.rg.d||R.fMin)} al ${fmtDY(R.rg.h||R.fMax)}`:"Acumulado a la fecha"} · ${R.totDias} día${R.totDias===1?"":"s"} con ficha · equipo actual de ${R.per} personas × ${nf1.format(R.hd)} h${(()=>{ const l=dotacionList(); return l.length>1? ` (antes: ${l.slice(0,-1).map((x,i)=>`${x.personas} personas hasta el ${fmtDY(addDays(l[i+1].desde,-1))}`).join(", ")})` : ""; })()}</span></div>
+  <div class="panel row" style="gap:10px 14px;padding:12px 16px">
+    <span class="lbl">Período</span>
+    <label class="row small" style="gap:6px">Desde<input type="date" id="rgD" value="${esc(R.rg.d||"")}" min="${esc(R.fMin||"")}" max="${esc(R.fMax||"")}"></label>
+    <label class="row small" style="gap:6px">Hasta<input type="date" id="rgH" value="${esc(R.rg.h||"")}" min="${esc(R.fMin||"")}" max="${esc(R.fMax||"")}"></label>
+    <div class="row" style="gap:4px">${[["todo","Todo"],["sem","Esta semana"],["7","Últimos 7 días"],["mes","Este mes"]].map(([k,t])=>`<button class="ghost small" data-rg="${k}">${t}</button>`).join("")}</div>
+    <span class="small muted grow" style="text-align:right">${R.totDias?"":"Sin fichas en el período elegido"}</span>
+  </div>
   <div class="tiles">
     <div class="tile" style="border-top:3px solid var(--armado)"><span class="lbl">Armado</span><span class="v num">${kghT==null?"—":nf1.format(kghT)} <small>kg/h</small></span><span class="s">${kg(T.a)} kg en ${nf1.format(T.eA)} h de equipo</span></div>
     <div class="tile" style="border-top:3px solid var(--forrado)"><span class="lbl">Revestimiento</span><span class="v num">${m2hT==null?"—":nf2.format(m2hT)} <small>m²/h</small></span><span class="s">${fm2(T.fm)} m² en ${nf1.format(T.eF)} h de equipo</span></div>
@@ -1071,7 +1081,15 @@ function renderRend(){
     <p class="small muted" style="margin:0">Horas efectivas = horas de equipo dedicadas a la casa. Cuando el mismo día se trabajó en varias casas, las ${nf1.format(R.hd)} h del día se reparten entre ellas según sus kg (el revestimiento pesa ${nf1.format(1+(Number(st.cfg.factorForrado)||0))} veces). Días equivalentes = horas efectivas ÷ ${nf1.format(R.hd)} h. Días con producción = días con ficha de esa casa, aunque se haya compartido el día con otra. HH = horas efectivas × personas de cada día.</p>
   </div>
   <p class="small muted">kg/h y m²/h son horas de equipo (todo el equipo trabajando): las ${nf1.format(R.hd)} h de cada día se reparten entre los elementos fabricados ese día según sus kg, con el revestimiento pesando ${nf1.format(1+(Number(st.cfg.factorForrado)||0))} veces la estructura, igual que en el resto del programa. HH = horas de equipo × personas de ese día. Casa completa = kg del catálogo ÷ rendimiento real, con la dotación actual; donde aún no hay producción se usa el rendimiento piloto. Los tipos que no suman kg (${esc((st.cfg.sinKgTipos||[]).join(", ")||"ninguno")}) no se consideran. Personas y horas por día se cambian en Configuración.</p>`;
+  const setR=(d,h)=>{ st.rendRango={d:d||"",h:h||""}; renderRend(); };
+  $("rgD").onchange=e=>setR(e.target.value, R.rg.h); $("rgH").onchange=e=>setR(R.rg.d, e.target.value);
+  el.querySelectorAll("[data-rg]").forEach(b=>b.onclick=()=>{ const k=b.dataset.rg, hoy=todayS();
+    if(k==="todo") setR("","");
+    else if(k==="sem"){ const w=D(hoy).getUTCDay()||7; setR(addDays(hoy,1-w),""); }
+    else if(k==="7") setR(addDays(hoy,-6),"");
+    else if(k==="mes") setR(hoy.slice(0,8)+"01",""); });
 }
+
 
 /* ---------- Vista: Producción diaria global (todas las casas) ---------- */
 function computeGlobal(){
