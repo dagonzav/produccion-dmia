@@ -1056,7 +1056,7 @@ function renderRend(){
     <span class="lbl">Período</span>
     <label class="row small" style="gap:6px">Desde<input type="date" id="rgD" value="${esc(R.rg.d||"")}" min="${esc(R.fMin||"")}" max="${esc(R.fMax||"")}"></label>
     <label class="row small" style="gap:6px">Hasta<input type="date" id="rgH" value="${esc(R.rg.h||"")}" min="${esc(R.fMin||"")}" max="${esc(R.fMax||"")}"></label>
-    <div class="row" style="gap:4px">${[["todo","Todo"],["sem","Esta semana"],["7","Últimos 7 días"],["mes","Este mes"]].map(([k,t])=>`<button class="ghost small" data-rg="${k}">${t}</button>`).join("")}</div>
+    <div class="row" style="gap:4px">${[["todo","Todo"],["sem","Esta semana"],["15","Últimos 15 días"],["mes","Este mes"]].map(([k,t])=>`<button class="ghost small" data-rg="${k}">${t}</button>`).join("")}</div>
     <span class="small muted grow" style="text-align:right">${R.totDias?"":"Sin fichas en el período elegido"}</span>
   </div>
   <div class="tiles">
@@ -1086,7 +1086,7 @@ function renderRend(){
   el.querySelectorAll("[data-rg]").forEach(b=>b.onclick=()=>{ const k=b.dataset.rg, hoy=todayS();
     if(k==="todo") setR("","");
     else if(k==="sem"){ const w=D(hoy).getUTCDay()||7; setR(addDays(hoy,1-w),""); }
-    else if(k==="7") setR(addDays(hoy,-6),"");
+    else if(k==="15") setR(addDays(hoy,-14),"");
     else if(k==="mes") setR(hoy.slice(0,8)+"01",""); });
 }
 
