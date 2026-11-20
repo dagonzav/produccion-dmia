@@ -999,7 +999,7 @@ function computeRend(){
     if(it.e){ const ok=Math.min(q,m.q-p.a); if(ok>0){ p.a+=ok; a=ok*m.a; } }
     if(it.o && m.f>0){ const ok=Math.min(q,m.q-p.o); if(ok>0){ p.o+=ok; f=ok*m.f; fm=ok*m.m; } }
     if(a+f<=0) continue;
-    (days.get(fi.fecha)||days.set(fi.fecha,[]).get(fi.fecha)).push({g:grupoDe(m.tipo),c:c.id,a,f,fm});
+    (days.get(fi.fecha)||days.set(fi.fecha,[]).get(fi.fecha)).push({g:parteDe(m.tipo),c:c.id,a,f,fm});
   }
   const G=new Map(); const get=g=>G.get(g)||G.set(g,{g,a:0,f:0,fm:0,hA:0,hF:0,eA:0,eF:0,dias:new Set()}).get(g);
   /* Por casa: las horas de cada día se reparten entre las casas trabajadas ese día según sus kg (revestimiento ponderado) */
@@ -1012,10 +1012,10 @@ function computeRend(){
       const cc=CS.get(x.c)||CS.set(x.c,{id:x.c,a:0,f:0,fm:0,h:0,hh:0,dias:new Set()}).get(x.c); cc.a+=x.a; cc.f+=x.f; cc.fm+=x.fm; cc.h+=hd*(x.a+w*x.f)/den; cc.hh+=hhD*(x.a+w*x.f)/den; cc.dias.add(fecha); } }
   /* kg por casa de cada grupo, según el catálogo de cada tipo de casa en uso */
   const tipos=[...new Set(st.casas.map(c=>c.tipo))].filter(t=>CAT[t]);
-  const catKg={}; for(const t of tipos){ catKg[t]={}; for(const [tipo,code,q,a,f] of CAT[t]){ if(a+f<=0) continue; const g=grupoDe(tipo); const o=catKg[t][g]||(catKg[t][g]={a:0,f:0}); o.a+=q*a; o.f+=q*f; } }
+  const catKg={}; for(const t of tipos){ catKg[t]={}; for(const [tipo,code,q,a,f] of CAT[t]){ if(a+f<=0) continue; const g=parteDe(tipo); const o=catKg[t][g]||(catKg[t][g]={a:0,f:0}); o.a+=q*a; o.f+=q*f; } }
   const allG=new Set([...G.keys(), ...tipos.flatMap(t=>Object.keys(catKg[t]))]);
   const rows=[...allG].map(g=>{ const r=G.get(g)||{g,a:0,f:0,fm:0,hA:0,hF:0,eA:0,eF:0,dias:new Set()}; return {...r, nd:r.dias.size, kgh:r.eA>0?r.a/r.eA:null, m2h:r.eF>0?r.fm/r.eF:null, kphA:r.hA>0?r.a/r.hA:null, kphF:r.hF>0?r.f/r.hF:null, mphF:r.hF>0?r.fm/r.hF:null}; })
-    .sort((x,y)=>{ const ix=GRUPOS.indexOf(x.g), iy=GRUPOS.indexOf(y.g); return (ix<0?99:ix)-(iy<0?99:iy) || x.g.localeCompare(y.g); });
+    .sort((x,y)=>{ const ix=PARTES.indexOf(x.g), iy=PARTES.indexOf(y.g); return (ix<0?99:ix)-(iy<0?99:iy) || x.g.localeCompare(y.g); });
   /* HH estimadas para una casa completa: kg del catálogo ÷ kg/HH real (si no hay dato, rendimiento piloto ÷ personas) */
   const est=(t,r)=>{ const k=catKg[t][r.g]; if(!k) return null; const pil=PILOTO[t]||{a:60,f:60};
     const rA=r.kphA ?? pil.a/per, rF=r.kphF ?? pil.f/per; const hA=k.a/rA, hF=k.f>0? k.f/rF : 0;
@@ -1031,7 +1031,7 @@ function renderRend(){
   if(st.dbState!=="ok"){ el.innerHTML=statePanel(); return; }
   const R=computeRend(), nf0=new Intl.NumberFormat("es-CL",{maximumFractionDigits:0}), nf2=new Intl.NumberFormat("es-CL",{maximumFractionDigits:2,minimumFractionDigits:2});
   const hh=v=>v==null?"—":nf0.format(v), dash=`<span class="muted">—</span>`;
-  const main=R.rows.filter(r=>GRUPOS.includes(r.g)), otros=R.rows.filter(r=>!GRUPOS.includes(r.g));
+  const main=R.rows, otros=[]; /* una sola tabla, en el orden de la pizarra */
   const t0=R.tipos[0];
   /* Totales del taller: kg/h y m²/h con las horas de equipo de todos los días */
   const T=R.rows.reduce((s,r)=>({a:s.a+r.a,fm:s.fm+r.fm,f:s.f+r.f,eA:s.eA+r.eA,eF:s.eF+r.eF,hA:s.hA+r.hA,hF:s.hF+r.hF}),{a:0,fm:0,f:0,eA:0,eF:0,hA:0,hF:0});
