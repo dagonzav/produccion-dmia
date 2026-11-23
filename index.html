@@ -1010,7 +1010,7 @@ function computeRend(){
   /* Rango de fechas elegido en la pestaña (vacío = todo). Los elementos se siguen deduplicando con toda la historia; solo se cuentan los días dentro del rango */
   const rg=st.rendRango||{}, inR=f=>(!rg.d||f>=rg.d)&&(!rg.h||f<=rg.h);
   const todas=[...days.keys()].sort(), fMin=todas[0]||null, fMax=todas[todas.length-1]||null;
-  let totHH=0; for(const [fecha,list] of days){ if(!inR(fecha)) continue; const den=list.reduce((s,x)=>s+x.a+w*x.f,0); if(den<=0) continue; const hD=horasEn(fecha), hhD=hD*personasEn(fecha); totHH+=hhD;
+  let totHH=0, totHHx=0; for(const [fecha,list] of days){ if(!inR(fecha)) continue; const den=list.reduce((s,x)=>s+x.a+w*x.f,0); if(den<=0) continue; const hD=horasEn(fecha), hhD=hD*personasEn(fecha); totHH+=hhD; if(D(fecha).getUTCDay()===6) totHHx+=hhD;
     for(const x of list){ const r=get(x.g); r.a+=x.a; r.f+=x.f; r.fm+=x.fm; r.hA+=hhD*x.a/den; r.hF+=hhD*w*x.f/den; r.eA+=hD*x.a/den; r.eF+=hD*w*x.f/den; r.dias.add(fecha);
       const cc=CS.get(x.c)||CS.set(x.c,{id:x.c,a:0,f:0,fm:0,h:0,hh:0,dias:new Set()}).get(x.c); cc.a+=x.a; cc.f+=x.f; cc.fm+=x.fm; cc.h+=hD*(x.a+w*x.f)/den; cc.hh+=hhD*(x.a+w*x.f)/den; cc.dias.add(fecha); } }
   /* kg por casa de cada grupo, según el catálogo de cada tipo de casa en uso */
@@ -1027,7 +1027,7 @@ function computeRend(){
   const casasR=st.casas.map(c=>{ const x=CS.get(c.id)||{a:0,f:0,fm:0,h:0,hh:0,dias:new Set()}; const d=[...x.dias].sort(); const C=computeCasa(c);
     return {casa:c, nd:d.length, ini:d[0]||null, fin:d[d.length-1]||null, h:x.h, hh:x.hh, a:x.a, fm:x.fm, avance:C.avance, done:C.avance>=1}; })
     .sort((x,y)=>(x.ini||"9")<(y.ini||"9")?-1:(x.ini||"9")>(y.ini||"9")?1:0);
-  return {rows,tipos,catKg,est,hd,per,hhDia,totDias,totHH,casasR,rg,fMin,fMax};
+  return {rows,tipos,catKg,est,hd,per,hhDia,totDias,totHH,totHHx,casasR,rg,fMin,fMax};
 }
 function renderRend(){
   const el=$("v-rend");
@@ -1065,7 +1065,7 @@ function renderRend(){
   <div class="tiles">
     <div class="tile" style="border-top:3px solid var(--armado)"><span class="lbl">Armado</span><span class="v num">${kghT==null?"—":nf1.format(kghT)} <small>kg/h</small></span><span class="s">${kg(T.a)} kg en ${nf1.format(T.eA)} h de equipo</span></div>
     <div class="tile" style="border-top:3px solid var(--forrado)"><span class="lbl">Revestimiento</span><span class="v num">${m2hT==null?"—":nf2.format(m2hT)} <small>m²/h</small></span><span class="s">${fm2(T.fm)} m² en ${nf1.format(T.eF)} h de equipo</span></div>
-    <div class="tile"><span class="lbl">HH trabajadas</span><span class="v num">${hh(R.totHH)}</span><span class="s">${R.totDias} días × personas × horas de cada día (${nf1.format(R.hd)} h; sábado ${nf1.format(horasEn("2026-11-21"))} h)</span></div>
+    <div class="tile"><span class="lbl">HH trabajadas</span><span class="v num">${hh(R.totHH)}</span><span class="s">${R.totHHx>0?`${hh(R.totHH-R.totHHx)} normales + ${hh(R.totHHx)} extra (sábados, ${nf1.format(horasEn("2026-11-21"))} h)`:`${R.totDias} días × personas × ${nf1.format(R.hd)} h`}</span></div>
     ${t0?`<div class="tile"><span class="lbl">Casa ${esc(catName(t0))} completa</span><span class="v num">${nf1.format(casaTot/R.hhDia)} <small>días</small></span><span class="s">${hh(casaTot)} HH con el equipo actual y el rendimiento real</span></div>`:""}
   </div>
   <div class="panel"><div class="tablewrap"><table class="num rend">
