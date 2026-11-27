@@ -95,7 +95,7 @@
   #dmiaLogin input{font:inherit;padding:9px 10px;border:1px solid var(--line,#ccc);border-radius:8px;background:var(--panel,#fff);color:inherit}
   #dmiaLogin button{font:inherit;padding:10px;border-radius:8px;border:0;background:var(--accent,#2f5d50);color:#fff;font-weight:600;cursor:pointer}
   #dmiaLogin .err{color:#b3261e;font-size:13px;min-height:1.2em}
-  .dmia-user{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--ink-3,#666);text-transform:none;letter-spacing:0;flex-wrap:wrap}
+  .brand .dmia-user,.brand .dmia-user span{display:flex;gap:8px;align-items:center;font-size:12px;color:rgba(255,255,255,.85);text-transform:none;letter-spacing:0;flex-wrap:wrap}
   .dmia-user button{font:inherit;font-size:12px;padding:2px 8px}
   .dmia-users td,.dmia-users th{vertical-align:middle}
   .dmia-users input,.dmia-users select{max-width:12em}`;
@@ -189,6 +189,7 @@
   --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
   --r:6px;
+  --bar:#012b8d; --bar-accent:#f34710;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#141719; --panel:#1c2023; --ink:#eef0ef; --ink-2:#b8bfc2; --ink-3:#8a9397; --line:#2c3236; --line-2:#3a4146;
@@ -203,17 +204,20 @@
 *{box-sizing:border-box}
 html{overflow-y:scroll;scrollbar-gutter:stable}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bar)}
 .wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--panel);border-bottom:1px solid var(--line)}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bar);border-bottom:3px solid var(--bar-accent);color:#fff}
 .top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;padding-block:10px}
-.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
+.brand{display:flex;align-items:center;gap:12px;margin-right:auto;flex-wrap:wrap}
+.brand .logo{display:block;line-height:0;border-radius:4px}.brand .logo img{display:block;height:42px;width:auto}
+.brand .logo:focus-visible{outline:2px solid var(--bar-accent);outline-offset:3px}
 .brand b{white-space:nowrap;font-family:var(--f-display);font-size:22px;font-weight:700;letter-spacing:.02em}
-.brand span{font-size:12px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.08em}
+.brand span{font-size:12px;color:rgba(255,255,255,.72);text-transform:uppercase;letter-spacing:.08em}
+.brand button{color:#fff;background:transparent;border-color:rgba(255,255,255,.35)}.brand button:hover{border-color:var(--bar-accent);color:#fff}
 nav.tabs{display:flex;gap:2px;overflow-x:auto}
-nav.tabs a{font-family:var(--f-display);font-weight:600;font-size:15px;letter-spacing:.03em;text-decoration:none;color:var(--ink-2);padding:6px 12px;border-radius:var(--r);white-space:nowrap}
-nav.tabs a[aria-current="page"]{background:var(--accent);color:var(--accent-ink)}
-nav.tabs a:hover:not([aria-current]){background:var(--accent-soft)}
+nav.tabs a{font-family:var(--f-display);font-weight:600;font-size:15px;letter-spacing:.03em;text-decoration:none;color:rgba(255,255,255,.86);padding:6px 12px;border-radius:var(--r);white-space:nowrap}
+nav.tabs a[aria-current="page"]{background:var(--bar-accent);color:#fff}
+nav.tabs a:hover:not([aria-current]){background:rgba(255,255,255,.12);color:#fff}
 main{padding-block:20px 60px;display:grid;gap:20px}
 [data-view]{display:grid;gap:20px;align-content:start;min-width:0}
 [hidden]{display:none!important}
@@ -296,7 +300,7 @@ details.casa[open] .muted.small+span{}
 
 <header class="top">
   <div class="wrap">
-    <div class="brand"><b>DMI-A</b><span>Producción diaria · Taller de prefabricados</span></div>
+    <div class="brand"><a href="#produccion" class="logo" id="logoHome" title="Ir al inicio"><img src="data:image/webp;base64,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" alt="DMI-A by Axis" width="120" height="42"></a><span>Producción diaria · Taller de prefabricados</span></div>
     <nav class="tabs" id="tabs">
       <a href="#produccion" data-v="produccion">Producción diaria</a>
       <a href="#casas" data-v="casas">Avance</a>
@@ -1509,6 +1513,7 @@ function render(){
 function saveSel(){ try{ localStorage.setItem("dmia.casa", st.casaId||""); }catch(e){} }
 let toastT; function toast(t){ let el=document.querySelector(".toast"); if(!el){ el=document.createElement("div"); el.className="toast"; el.setAttribute("role","status"); document.body.appendChild(el); } el.textContent=t; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>el.hidden=true,2600); }
 window.addEventListener("hashchange",render);
+$("logoHome").onclick=e=>{ e.preventDefault(); if(location.hash!=="#produccion") location.hash="#produccion"; else render(); window.scrollTo({top:0}); };
 
 $("cgCasa").onchange=()=>{ st.cgSel=$("cgCasa").value; if(st.draft) st.draft.casaId=st.cgSel; renderCargar(); };
 $("bFoto").onclick=()=>$("fFoto").click(); $("fFoto").onchange=e=>{ const fs=[...e.target.files]; e.target.value=""; if(fs.length) readPhotos(fs); };
