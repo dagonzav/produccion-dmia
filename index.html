@@ -1,4 +1,180 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.4 system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>Producción DMI-A</title>
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex"><title>DMI-A Producción</title><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.4 system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script><script>window.DMIA_SUPABASE={"url": "https://tcqrpdwbafdramkgewaq.supabase.co", "key": "sb_publishable_e4tLXCZVq2ro5d7115q5Mg_Yw1FYbqm"};</script><script>/* Producción DMI-A en la web: login propio y base de datos en Supabase.
+   Reemplaza las capacidades de Claude (window.claude.use) por equivalentes sobre Supabase,
+   para que el programa funcione igual que dentro de Claude. */
+(function(){
+  const CFG = window.DMIA_SUPABASE || {};
+  const DOM = "@dmia.local";
+  const sb = window.supabase.createClient(CFG.url, CFG.key, { auth:{ persistSession:true, autoRefreshToken:true, storageKey:"dmia-auth" } });
+  window.DMIA_SB = sb;
+  let perfil = null, readyRes;
+  const ready = new Promise(r => readyRes = r);
+  const NIVEL = { visualizador:"Visualizador", editor:"Editor", administrador:"Administrador" };
+  const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+  /* ---------- Errores ---------- */
+  function mkErr(e){
+    const m = (e && (e.message || e.error_description)) || String(e);
+    const x = new Error(/row-level security|permission denied/i.test(m) ? "Tu usuario no tiene permiso para este cambio" : m);
+    x.code = (e && (e.code==="42501" || /row-level security|permission denied/i.test(m))) ? "permission_denied" : ((e && e.code) || "error");
+    return x;
+  }
+  const chk = r => { if(r.error) throw mkErr(r.error); return r.data; };
+
+  /* ---------- Base de datos (misma forma que la de Claude) ---------- */
+  const genId = () => { const a="abcdefghijklmnopqrstuvwxyz0123456789"; let s=""; for(const x of crypto.getRandomValues(new Uint8Array(20))) s+=a[x%36]; return s; };
+  const snapDoc = (id, data) => ({ id, exists: data!=null, data: () => data });
+  const snapCol = rows => ({ empty: !rows.length, size: rows.length, docs: rows.map(r => snapDoc(r.id, r.data)) });
+  async function fetchCol(col, filt){
+    const out = []; let from = 0;
+    for(;;){
+      let q = sb.from("docs").select("id,data").eq("col", col).order("id").range(from, from+999);
+      if(filt) q = q.filter("data->>"+filt[0], "eq", String(filt[1]));
+      const d = chk(await q); out.push(...d); if(d.length < 1000) break; from += 1000;
+    }
+    return out;
+  }
+  async function fetchDoc(col, id){ const d = chk(await sb.from("docs").select("data").eq("col", col).eq("id", id).maybeSingle()); return d ? d.data : null; }
+
+  const listeners = {}; /* col -> Set de funciones */
+  const timers = {};
+  function refresh(col){
+    clearTimeout(timers[col]);
+    timers[col] = setTimeout(async () => {
+      const ls = listeners[col]; if(!ls || !ls.size) return;
+      try{ const rows = await fetchCol(col); for(const l of ls) l.ok(rows); }
+      catch(e){ for(const l of ls) l.err && l.err(e); }
+    }, 150);
+  }
+  let channel = null;
+  function live(){
+    if(channel) return;
+    channel = sb.channel("dmia-docs").on("postgres_changes", { event:"*", schema:"public", table:"docs" }, p => {
+      const col = (p.new && p.new.col) || (p.old && p.old.col); if(col) refresh(col); else Object.keys(listeners).forEach(refresh);
+    }).subscribe();
+    /* respaldo por si la conexión en vivo se corta: recarga al volver a la pestaña */
+    document.addEventListener("visibilitychange", () => { if(!document.hidden) Object.keys(listeners).forEach(refresh); });
+  }
+  function listen(col, ok, err){
+    live(); const l = { ok, err }; (listeners[col] = listeners[col] || new Set()).add(l);
+    fetchCol(col).then(ok).catch(e => err && err(e));
+    return () => listeners[col].delete(l);
+  }
+  function docRef(col, id){
+    return {
+      id,
+      get: async () => snapDoc(id, await fetchDoc(col, id)),
+      set: async data => { chk(await sb.from("docs").upsert({ col, id, data, actualizado:new Date().toISOString() })); refresh(col); },
+      update: async part => { const cur = await fetchDoc(col, id); if(cur==null){ const e=new Error("El registro ya no existe"); e.code="not_found"; throw e; }
+        chk(await sb.from("docs").update({ data:{...cur, ...part}, actualizado:new Date().toISOString() }).eq("col", col).eq("id", id).select("id").single()); refresh(col); },
+      delete: async () => { chk(await sb.from("docs").delete().eq("col", col).eq("id", id)); refresh(col); },
+      onSnapshot: (fn, err) => listen(col, rows => { const r = rows.find(x => x.id===id); fn(snapDoc(id, r ? r.data : null)); }, err)
+    };
+  }
+  function colRef(col){
+    return {
+      doc: id => docRef(col, id),
+      add: async data => { const id = genId(); chk(await sb.from("docs").insert({ col, id, data })); refresh(col); return { id }; },
+      get: async () => snapCol(await fetchCol(col)),
+      where: (f, op, v) => ({ get: async () => snapCol(await fetchCol(col, [f, v])) }),
+      onSnapshot: (fn, err) => listen(col, rows => fn(snapCol(rows)), err)
+    };
+  }
+  const db = { collection: colRef, doc: path => { const [c, i] = path.split("/"); return docRef(c, i); } };
+
+  /* ---------- Capacidades ---------- */
+  const user = { nivel: async () => perfil ? perfil.nivel : "visualizador", canEdit: async () => !!perfil && perfil.nivel==="administrador", isOwner: async () => false };
+  const downloads = { save: async ({ filename, data }) => { const u = URL.createObjectURL(data); const a = document.createElement("a"); a.href = u; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); } };
+  window.claude = { web:true, use: async n => { await ready; if(n==="db") return db; if(n==="user") return user; if(n==="downloads") return downloads; return null; } };
+
+  /* ---------- Login ---------- */
+  const css = `
+  #dmiaLogin{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:16px;background:var(--bg,#f6f5f2)}
+  #dmiaLogin form{width:min(360px,100%);display:grid;gap:12px;background:var(--panel,#fff);border:1px solid var(--line,#ddd);border-radius:14px;padding:24px}
+  #dmiaLogin h1{margin:0;font-size:20px} #dmiaLogin p{margin:0;color:var(--ink-3,#666);font-size:13px}
+  #dmiaLogin label{display:grid;gap:4px;font-size:13px;color:var(--ink-2,#444)}
+  #dmiaLogin input{font:inherit;padding:9px 10px;border:1px solid var(--line,#ccc);border-radius:8px;background:var(--panel,#fff);color:inherit}
+  #dmiaLogin button{font:inherit;padding:10px;border-radius:8px;border:0;background:var(--accent,#2f5d50);color:#fff;font-weight:600;cursor:pointer}
+  #dmiaLogin .err{color:#b3261e;font-size:13px;min-height:1.2em}
+  .dmia-user{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--ink-3,#666);text-transform:none;letter-spacing:0;flex-wrap:wrap}
+  .dmia-user button{font:inherit;font-size:12px;padding:2px 8px}
+  .dmia-users td,.dmia-users th{vertical-align:middle}
+  .dmia-users input,.dmia-users select{max-width:12em}`;
+  function loginForm(msg){
+    let w = document.getElementById("dmiaLogin");
+    if(!w){ w = document.createElement("div"); w.id = "dmiaLogin"; document.body.appendChild(w); }
+    w.innerHTML = `<form autocomplete="on"><h1>DMI-A · Producción</h1><p>Solo para editores y administradores. Para ver la producción no necesitas usuario.</p>
+      <label>Usuario<input name="u" autocomplete="username" autocapitalize="none" required></label>
+      <label>Clave<input name="p" type="password" autocomplete="current-password" required></label>
+      <div class="err" role="alert">${esc(msg||"")}</div><button type="submit">Entrar</button><button type="button" class="ghost" id="dmiaCancel" style="background:transparent;color:var(--ink-2,#444);border:1px solid var(--line,#ccc)">Volver sin usuario</button></form>`;
+    w.querySelector("#dmiaCancel").onclick = () => w.remove();
+    const f = w.querySelector("form"); f.u.focus();
+    f.onsubmit = async e => { e.preventDefault(); const b = f.querySelector("button"); b.disabled = true; b.textContent = "Entrando…";
+      const u = f.u.value.trim().toLowerCase();
+      const r = await sb.auth.signInWithPassword({ email: u.includes("@") ? u : u + DOM, password: f.p.value });
+      if(r.error){ b.disabled = false; b.textContent = "Entrar"; w.querySelector(".err").textContent = /invalid/i.test(r.error.message) ? "Usuario o clave incorrectos" : r.error.message; return; }
+      location.reload(); };
+  }
+  async function start(){
+    const { data:{ session } } = await sb.auth.getSession();
+    if(!session){ guestChip(); readyRes(); return; }  /* sin usuario: Visualizador */
+    const r = await sb.from("perfiles").select("id,usuario,nombre,nivel").eq("id", session.user.id).maybeSingle();
+    if(r.error || !r.data){ await sb.auth.signOut(); guestChip(); readyRes(); loginForm(r.error ? "No se pudo leer tu usuario: "+r.error.message : "Este usuario no tiene acceso al programa"); return; }
+    perfil = r.data; userChip(); readyRes();
+  }
+  function guestChip(){
+    const brand = document.querySelector(".brand"); if(!brand || document.querySelector(".dmia-user")) return;
+    brand.insertAdjacentHTML("beforeend", `<span class="dmia-user"><button type="button" class="ghost" id="dmiaIn">Ingresar</button></span>`);
+    document.getElementById("dmiaIn").onclick = () => loginForm();
+  }
+  function userChip(){
+    const brand = document.querySelector(".brand"); if(!brand || document.querySelector(".dmia-user")) return;
+    brand.insertAdjacentHTML("beforeend", `<span class="dmia-user"><span>${esc(perfil.nombre||perfil.usuario)} · ${NIVEL[perfil.nivel]}</span><button type="button" class="ghost" id="dmiaPw">Cambiar clave</button><button type="button" class="ghost" id="dmiaOut">Salir</button></span>`);
+    document.getElementById("dmiaOut").onclick = async () => { await sb.auth.signOut(); location.reload(); };
+    document.getElementById("dmiaPw").onclick = async () => {
+      const c = window.prompt("Nueva clave (mínimo 8 caracteres)"); if(!c) return;
+      const r = await sb.rpc("cambiar_mi_clave", { p_clave:c }); toastW(r.error ? "No se pudo cambiar: "+r.error.message : "Clave cambiada"); };
+  }
+  function toastW(t){ if(typeof window.toast==="function") window.toast(t); else alert(t); }
+
+  /* ---------- Usuarios (pestaña Administración, solo Administrador) ---------- */
+  window.DMIA_EXTRA_ADMIN = async function(el){
+    if(!perfil || perfil.nivel!=="administrador" || el.querySelector("#dmiaUsers")) return;
+    el.insertAdjacentHTML("beforeend", `<div class="panel" id="dmiaUsers" style="display:grid;gap:12px">
+      <div class="headline"><h1>Usuarios</h1><span class="chip neutral">Solo administradores</span><span class="meta">Quién puede entrar al programa y qué puede hacer.</span></div>
+      <p class="small muted" style="margin:0"><b>Visualizador</b>: Producción diaria, Avance y Detalle casa. <b>Editor</b>: todas las pestañas; carga fichas y marca envíos, pero no cambia Configuración ni Administración. <b>Administrador</b>: todo, incluidos los usuarios.</p>
+      <div class="tablewrap"><table class="dmia-users"><thead><tr><th>Usuario</th><th>Nombre</th><th>Nivel</th><th></th></tr></thead><tbody id="dmiaUL"><tr><td colspan="4" class="muted">Cargando…</td></tr></tbody></table></div>
+      <h2 style="margin:0">Nuevo usuario</h2>
+      <div class="row" id="dmiaNew"><input id="dmiaNU" placeholder="Usuario, ej: jperez" autocapitalize="none"><input id="dmiaNN" placeholder="Nombre"><input id="dmiaNP" type="text" placeholder="Clave (mín. 8)">
+        <select id="dmiaNL"><option value="visualizador">Visualizador</option><option value="editor">Editor</option><option value="administrador">Administrador</option></select>
+        <button class="pri" id="dmiaNB">Crear usuario</button></div></div>`);
+    const L = el.querySelector("#dmiaUL");
+    const load = async () => {
+      const r = await sb.from("perfiles").select("id,usuario,nombre,nivel").order("usuario");
+      if(r.error){ L.innerHTML = `<tr><td colspan="4">No se pudieron leer los usuarios: ${esc(r.error.message)}</td></tr>`; return; }
+      L.innerHTML = r.data.map(u => `<tr data-u="${u.id}"><td class="mono">${esc(u.usuario)}</td><td><input value="${esc(u.nombre||"")}" data-n></td>
+        <td><select data-l>${Object.entries(NIVEL).map(([k,v]) => `<option value="${k}"${k===u.nivel?" selected":""}>${v}</option>`).join("")}</select></td>
+        <td class="row" style="gap:6px;flex-wrap:nowrap"><button data-s>Guardar</button><button data-p>Nueva clave</button>${u.id===perfil.id?"":`<button class="ghost danger" data-d>Eliminar</button>`}</td></tr>`).join("");
+      L.querySelectorAll("tr[data-u]").forEach(tr => { const id = tr.dataset.u, n = tr.querySelector("[data-n]"), l = tr.querySelector("[data-l]");
+        tr.querySelector("[data-s]").onclick = async () => { const r = await sb.rpc("cambiar_usuario", { p_id:id, p_nivel:l.value, p_nombre:n.value, p_clave:null }); toastW(r.error ? r.error.message : "Usuario guardado"); load(); };
+        tr.querySelector("[data-p]").onclick = async () => { const c = window.prompt("Nueva clave para "+tr.cells[0].textContent+" (mínimo 8 caracteres)"); if(!c) return;
+          const r = await sb.rpc("cambiar_usuario", { p_id:id, p_nivel:l.value, p_nombre:n.value, p_clave:c }); toastW(r.error ? r.error.message : "Clave cambiada"); };
+        const d = tr.querySelector("[data-d]"); if(d) d.onclick = async () => { if(!window.confirm("¿Eliminar el usuario "+tr.cells[0].textContent+"? Ya no podrá entrar.")) return;
+          const r = await sb.rpc("eliminar_usuario", { p_id:id }); toastW(r.error ? r.error.message : "Usuario eliminado"); load(); };
+      });
+    };
+    el.querySelector("#dmiaNB").onclick = async () => {
+      const u = el.querySelector("#dmiaNU").value.trim(), p = el.querySelector("#dmiaNP").value;
+      if(!u || !p){ toastW("Escribe el usuario y la clave"); return; }
+      const r = await sb.rpc("crear_usuario", { p_usuario:u, p_clave:p, p_nivel:el.querySelector("#dmiaNL").value, p_nombre:el.querySelector("#dmiaNN").value });
+      if(r.error){ toastW(r.error.message); return; }
+      toastW("Usuario "+u.toLowerCase()+" creado"); ["#dmiaNU","#dmiaNN","#dmiaNP"].forEach(s => el.querySelector(s).value = ""); load(); };
+    load();
+  };
+
+  const st = document.createElement("style"); st.textContent = css; document.head.appendChild(st);
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+})();
+</script></head><body><title>Producción DMI-A</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -111,7 +287,8 @@ details summary{cursor:pointer;font-family:var(--f-display);font-weight:600;font
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
 .elinput{width:9.5em;font-family:var(--f-mono);font-size:13px}
 .pill-tipo{font-size:12px;color:var(--ink-3)}
-body:not(.is-admin) .adminOnly{display:none!important}
+body:not(.can-edit) .adminOnly{display:none!important}
+.ro-note{margin:0}
 details.casa>summary{cursor:pointer}
 details.casa>summary::-webkit-details-marker{display:none}
 details.casa[open] .muted.small+span{}
@@ -119,7 +296,7 @@ details.casa[open] .muted.small+span{}
 
 <header class="top">
   <div class="wrap">
-    <div class="brand"><b>DMI-A</b><span>Producción diaria · Taller de prefabricados</span><span id="pubStamp" style="text-transform:none;letter-spacing:0"></span></div>
+    <div class="brand"><b>DMI-A</b><span>Producción diaria · Taller de prefabricados</span></div>
     <nav class="tabs" id="tabs">
       <a href="#produccion" data-v="produccion">Producción diaria</a>
       <a href="#casas" data-v="casas">Avance</a>
@@ -188,7 +365,7 @@ details.casa[open] .muted.small+span{}
 </div>
 <datalist id="dlCodes"></datalist>
 
-<script>window.claude={use:async()=>null};</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 "use strict";
 /* ---------- Catálogo (BD de las planillas de rendimiento piloto) ----------
@@ -251,7 +428,7 @@ const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">
 const $ = id => document.getElementById(id);
 
 /* ---------- Estado ---------- */
-const st = { db:null, casas:[], fichas:[], cfg:{...DEF_CFG}, loaded:{casas:false,fichas:false}, casaId:null, corte:null, draft:null, editId:null, dbState:"connecting", isAdmin:false, adm:null };
+const st = { db:null, casas:[], fichas:[], cfg:{...DEF_CFG}, loaded:{casas:false,fichas:false}, casaId:null, corte:null, draft:null, editId:null, dbState:"connecting", isAdmin:false, canEdit:false, nivel:"visualizador", adm:null };
 try { st.casaId = localStorage.getItem("dmia.casa"); st.rango = +localStorage.getItem("dmia.rango")||10; } catch(e){}
 
 /* Cada fila de una ficha puede ser de una casa distinta; sin casa propia, es la casa de la ficha */
@@ -403,7 +580,7 @@ function renderResumen(){
   const diffTxt = R.diffDias>0 ? `${R.diffDias} día${R.diffDias>1?"s":""} hábil${R.diffDias>1?"es":""} después del plan` : R.diffDias<0 ? `${-R.diffDias} día${R.diffDias<-1?"s":""} hábil${R.diffDias<-1?"es":""} antes del plan` : "Coincide con el plan";
   const diffCls = R.diffDias>0? "crit" : "good";
   el.innerHTML = `
-  <div class="headline"><h1>${esc(casa.nombre)}</h1><select id="casaSel" aria-label="Casa" style="align-self:center">${casaOptions(st.casaId)}</select><span class="meta">Tipo ${esc(catName(casa.tipo))} · inicio ${fmtDY(R.inicio)} · plazo de término ${st.isAdmin?`<input type="date" id="plazo" value="${esc(casa.termino||"")}" aria-label="Plazo de término de la casa">`:`<b>${casa.termino?fmtDY(casa.termino):"según rendimiento piloto"}</b>`} · datos al ${fmtDY(R.corte)}</span>${status}</div>
+  <div class="headline"><h1>${esc(casa.nombre)}</h1><select id="casaSel" aria-label="Casa" style="align-self:center">${casaOptions(st.casaId)}</select><span class="meta">Tipo ${esc(catName(casa.tipo))} · inicio ${fmtDY(R.inicio)} · plazo de término ${st.canEdit?`<input type="date" id="plazo" value="${esc(casa.termino||"")}" aria-label="Plazo de término de la casa">`:`<b>${casa.termino?fmtDY(casa.termino):"según rendimiento piloto"}</b>`} · datos al ${fmtDY(R.corte)}</span>${status}</div>
   <div class="tiles">
     <div class="tile"><span class="lbl">Kg fabricados</span><span class="v num">${kg(R.done)} <small>/ ${kg(R.total)} kg</small></span>
       <div class="bar" title="Estructura y revestimiento"><i style="width:${R.doneA/R.total*100}%;background:var(--armado)"></i><i style="width:${R.doneF/R.total*100}%;background:var(--forrado)"></i></div>
@@ -823,7 +1000,7 @@ function admErrors(A){
 function renderAdmin(){
   const el=$("v-admin");
   if(st.dbState!=="ok"){ el.innerHTML=statePanel(); return; }
-  if(!st.isAdmin){ el.innerHTML=`<div class="panel empty"><h2>Requiere acceso de administrador</h2><p>Solo el dueño y los editores de esta página pueden modificar la base de datos de elementos.</p></div>`; return; }
+  if(!st.canEdit){ el.innerHTML=`<div class="panel empty"><h2>Requiere acceso de administrador</h2><p>Solo el dueño y los editores de esta página pueden modificar la base de datos de elementos.</p></div>`; return; }
   if(!st.adm || (!st.adm.isNew && !CAT[st.adm.tipo])) admLoad(st.adm && CAT[st.adm.tipo] ? st.adm.tipo : (st.casas.find(c=>c.id===st.casaId)||{}).tipo || tiposList()[0]);
   else if(!st.adm.dirty && !st.adm.isNew) admLoad(st.adm.tipo);
   const A=st.adm, tot=admTotals(A.rows), meta=CATMETA[A.tipo], usedBy=st.casas.filter(c=>c.tipo===A.tipo);
@@ -1227,14 +1404,14 @@ function marca(done,tot,col,nom){
 }
 /* Envío a obra: casas.envios = {parte: "AAAA-MM-DD"}; lo marca un administrador en la pizarra */
 function envioMarca(R,g){ const f=(R.casa.envios||{})[g];
-  if(f) return `<span class="pz-env si${st.isAdmin?" btn":""}" ${st.isAdmin?`role="button" tabindex="0" data-env="${esc(R.casa.id)}" data-g="${esc(g)}"`:""} title="Enviado a obra el ${fmtDY(f)}${st.isAdmin?" · clic para quitar":""}"></span>`;
-  return st.isAdmin? `<span class="pz-env btn" role="button" tabindex="0" data-env="${esc(R.casa.id)}" data-g="${esc(g)}" title="Marcar enviado a obra hoy"></span>` : `<span class="pz-env vacio"></span>`; }
+  if(f) return `<span class="pz-env si${st.canEdit?" btn":""}" ${st.canEdit?`role="button" tabindex="0" data-env="${esc(R.casa.id)}" data-g="${esc(g)}"`:""} title="Enviado a obra el ${fmtDY(f)}${st.canEdit?" · clic para quitar":""}"></span>`;
+  return st.canEdit? `<span class="pz-env btn" role="button" tabindex="0" data-env="${esc(R.casa.id)}" data-g="${esc(g)}" title="Marcar enviado a obra hoy"></span>` : `<span class="pz-env vacio"></span>`; }
 function renderPizarra(Rs){
   const Ps=Rs.map(R=>avancePartes(R)); const R0=P=>Rs[Ps.indexOf(P)];
   const extra=[...new Set(Ps.flatMap(P=>[...P.keys()]))].filter(g=>!PARTES.includes(g));
   const cols=[...PARTES,...extra].filter(g=>Ps.some(P=>P.has(g)));
   return `<div class="panel" style="display:grid;gap:10px">
-    <div class="row"><h2 class="grow">Pizarra de avance</h2><span class="legend" style="margin:0"><span><b style="color:var(--armado)">✓</b> Armado</span><span><b style="color:var(--forrado)">✓</b> Revestimiento</span><span><span class="pz-m part" style="--c:var(--ink-3);--p:40%;transform:scale(.8)"><b>40</b></span> % en proceso</span><span><span class="pz-env si" style="vertical-align:-2px"></span> Enviado a obra</span><span>– no aplica</span></span></div>${st.isAdmin?`<p class="small muted" style="margin:0">Toca el círculo de una parte para marcarla como enviada a obra (queda con la fecha de hoy); tócalo de nuevo para quitarla.</p>`:""}
+    <div class="row"><h2 class="grow">Pizarra de avance</h2><span class="legend" style="margin:0"><span><b style="color:var(--armado)">✓</b> Armado</span><span><b style="color:var(--forrado)">✓</b> Revestimiento</span><span><span class="pz-m part" style="--c:var(--ink-3);--p:40%;transform:scale(.8)"><b>40</b></span> % en proceso</span><span><span class="pz-env si" style="vertical-align:-2px"></span> Enviado a obra</span><span>– no aplica</span></span></div>${st.canEdit?`<p class="small muted" style="margin:0">Toca el círculo de una parte para marcarla como enviada a obra (queda con la fecha de hoy); tócalo de nuevo para quitarla.</p>`:""}
     <div class="tablewrap"><table class="pz">
       <tr><th class="f">Casa</th>${cols.map(g=>`<th class="c">${esc(g)}</th>`).join("")}<th class="c">Total</th></tr>
       ${Rs.map((R,ri)=>{ const P=Ps[ri]; return `<tr><th class="f"><a href="#casas" data-pz="${esc(R.casa.id)}" title="${esc(R.casa.nombre)}">${esc(R.casa.numero||R.casa.nombre)}</a></th>${cols.map(g=>{ const o=P.get(g); if(!o) return `<td class="c muted">—</td>`;
@@ -1305,11 +1482,24 @@ function renderCasas(){
   el.querySelectorAll("[data-det]").forEach(b=>b.onclick=e=>{ e.preventDefault(); e.stopPropagation(); st.casaId=b.dataset.det; st.corte=null; saveSel(); location.hash="#detalle"; });
 }
 
+/* ---------- Niveles de usuario: visualizador, editor, administrador ---------- */
+function setNivel(nv){ st.nivel=nv; st.isAdmin = nv==="administrador"; st.canEdit = nv==="administrador" || nv==="editor";
+  document.body.classList.toggle("is-admin", st.isAdmin); document.body.classList.toggle("can-edit", st.canEdit); }
+/* El editor ve Configuración y Administración, pero sin poder cambiar nada */
+function soloLectura(id){ if(st.isAdmin || !st.canEdit) return; const el=$(id); if(!el) return;
+  el.querySelectorAll("input,select,textarea,button").forEach(x=>{ if(x.matches("#admTipo,#admFilter")) return; if(x.matches("button.pri,button.danger,#pDotAdd,[data-dotdel],[data-ced],[data-cdel],#admImport,#admNew,#admDiscard,[data-rest]")) x.hidden=true; else x.disabled=true; });
+  const p=el.querySelector(".panel"); if(p && !el.querySelector(".ro-note")) p.insertAdjacentHTML("afterbegin",`<div class="notice small ro-note">Tu usuario es <b>Editor</b>: puedes ver esta pestaña, pero solo un Administrador puede cambiarla.</div>`); }
+{ const _a=renderAdmin, _o=renderObras, _t=admDrawTable, _h=admLoadHist;
+  renderAdmin=function(){ _a(); soloLectura("v-admin"); if(window.DMIA_EXTRA_ADMIN && st.dbState==="ok" && st.canEdit) window.DMIA_EXTRA_ADMIN($("v-admin")); };
+  renderObras=function(){ _o(); soloLectura("v-obras"); };
+  admDrawTable=function(){ _t(); soloLectura("admTable"); };
+  admLoadHist=async function(){ await _h(); soloLectura("admHist"); }; }
+
 /* ---------- Navegación ---------- */
 const VIEWS=["produccion","casas","detalle","rendimientos","cargar","fichas","obras","admin"];
 const SECTION={produccion:"v-prod",casas:"v-casas",detalle:"v-resumen",rendimientos:"v-rend",cargar:"v-cargar",fichas:"v-fichas",obras:"v-obras",admin:"v-admin"};
 const READER_VIEWS=["produccion","casas","detalle"];
-function view(){ let h=location.hash.slice(1); if(h==="resumen") h="detalle"; if(!VIEWS.includes(h)) return "produccion"; return (st.isAdmin||READER_VIEWS.includes(h))? h : "produccion"; }
+function view(){ let h=location.hash.slice(1); if(h==="resumen") h="detalle"; if(!VIEWS.includes(h)) return "produccion"; return (st.canEdit||READER_VIEWS.includes(h))? h : "produccion"; }
 function render(){
   const v=view();
   document.querySelectorAll("[data-view]").forEach(s=>s.hidden = s.id!==SECTION[v]);
@@ -1330,22 +1520,25 @@ for(const [zone,fn,acc] of [["dropFoto",readPhotos,/^image\//],["dropXls",f=>rea
 }
 render();
 
-/* ---------- Datos publicados (data.json) ---------- */
+/* ---------- Conexión al registro compartido ---------- */
 (async()=>{
-  try{
-    const r = await fetch("data.json", {cache:"no-store"}); if(!r.ok) throw new Error("HTTP "+r.status);
-    const j = await r.json();
-    const cats = j.catalogos||{};
-    if(Object.keys(cats).length){ const cat={}, pil={}, meta={};
-      for(const [id,x] of Object.entries(cats)){ cat[id]=(x.items||[]).map(r=>[r.t||"",r.c,Math.max(1,+r.q||1),+r.a||0,+r.f||0,+r.m||0]); pil[id]={a:+x.pilA||60,f:+x.pilF||60,ref:x.ref||""}; meta[id]={nombre:x.nombre||id}; }
-      RAWCAT=cat; PILOTO=pil; CATMETA=meta; }
-    st.cfg={...DEF_CFG,...(j.config||{})}; applyCfg();
-    st.casas=(j.casas||[]).sort((a,b)=>(a.creado||0)-(b.creado||0)); st.fichas=j.fichas||[];
-    st.loaded={casas:true,fichas:true}; st.dbState="ok";
-    if(!st.casas.find(c=>c.id===st.casaId)) st.casaId=st.casas[0]?.id||null;
-    if(j.generado){ const d=new Date(j.generado); $("pubStamp").textContent="Datos al "+d.toLocaleString("es-CL",{dateStyle:"medium",timeStyle:"short"}); }
-    render();
-  }catch(e){ st.dbState="error"; st.dbErr="No se pudieron cargar los datos ("+(e.message||e)+")"; render(); }
+  const db = await claude.use("db").catch(()=>null);
+  if(!db){ st.dbState="none"; render(); return; }
+  st.db=db;
+  claude.use("user").then(async u=>{ const nv = u && u.nivel ? await u.nivel().catch(()=>"visualizador") : ((u && (await u.canEdit().catch(()=>false) || await u.isOwner().catch(()=>false))) ? "administrador" : "visualizador"); setNivel(nv); render(); if(view()==="admin"||view()==="obras") render(); }).catch(()=>{});
+  const onErr = e => { st.dbState="error"; st.dbErr=e.message||e.code; render(); };
+  const ready = () => { if(st.loaded.casas && st.loaded.fichas){ st.dbState="ok"; if(!st.casas.find(c=>c.id===st.casaId)) st.casaId = st.casas[0]?.id||null; render(); } };
+  db.collection("casas").onSnapshot(s=>{ st.casas=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.creado||0)-(b.creado||0)); st.loaded.casas=true; ready(); if(st.dbState==="ok") render(); }, onErr);
+  db.collection("fichas").onSnapshot(s=>{ st.fichas=s.docs.map(d=>({id:d.id,...d.data()})); st.loaded.fichas=true; ready(); if(st.dbState==="ok" && view()!=="cargar") render(); }, onErr);
+  db.collection("catalogos").onSnapshot(s=>{
+    if(!s.docs.length) return; /* sin catálogo en la base: se usa el de las planillas piloto */
+    const cat={}, pil={}, meta={};
+    for(const d of s.docs){ const x=d.data()||{}; cat[d.id]=(x.items||[]).map(r=>[r.t||"",r.c,Math.max(1,+r.q||1),+r.a||0,+r.f||0,+r.m||0]); pil[d.id]={a:+x.pilA||60,f:+x.pilF||60,ref:x.ref||""}; meta[d.id]={nombre:x.nombre||d.id,actualizado:x.actualizado||null,version:x.version||1}; }
+    RAWCAT=cat; PILOTO=pil; CATMETA=meta; applyCfg();
+    if(st.dbState==="ok" && view()!=="cargar" && !(view()==="admin" && st.adm && st.adm.dirty)) render();
+    else if(view()==="admin" && st.adm && st.adm.dirty) toast("Otro administrador cambió el catálogo; al guardar se reemplaza con tu versión");
+  }, ()=>{});
+  db.doc("config/general").onSnapshot(s=>{ st.cfg={...DEF_CFG,...(s.exists?s.data():{})}; applyCfg(); if(st.dbState==="ok" && view()!=="cargar") render(); }, ()=>{});
 })();
 </script>
 </body></html>
